@@ -84,10 +84,15 @@ function TeacherUploader({ onClose, onPublish }) {
 
   const handleFile = (e) => {
     const f = e.target.files?.[0];
-    if (f) {
-      setFile({ name: f.name, size: f.size });
-      setTimeout(() => setStep(2), 600);
-    }
+    if (!f) return;
+    const ext = f.name.split('.').pop().toLowerCase();
+    const fileType = ext === 'pdf' ? 'pdf' : ext === 'docx' || ext === 'doc' ? 'docx' : 'text';
+    const reader = new FileReader();
+    reader.onload = (ev) => {
+      setFile({ name: f.name, size: f.size, fileData: ev.target.result, fileType });
+      setTimeout(() => setStep(2), 300);
+    };
+    reader.readAsArrayBuffer(f);
   };
 
   return (
@@ -251,7 +256,21 @@ function TeacherUploader({ onClose, onPublish }) {
               ? <button className="btn btn-primary" disabled={step === 1 && !file} onClick={() => setStep(step + 1)}>
                   Volgende <Icon name="arrowRight" size={14}/>
                 </button>
-              : <button className="btn btn-primary" onClick={() => { onPublish(); onClose(); }}>
+              : <button className="btn btn-primary" onClick={() => {
+                    if (file) {
+                      onPublish({
+                        id: 'upload-' + Date.now(),
+                        title: file.name.replace(/\.[^.]+$/, ''),
+                        subject: 'Upload',
+                        teacher: 'Klaargezet door school',
+                        minutes: Math.round((file.size / 1024) / 10) || 5,
+                        lang: voice.startsWith('nl') ? 'nl-NL' : 'en-GB',
+                        fileType: file.fileType,
+                        fileData: file.fileData,
+                      });
+                    }
+                    onClose();
+                  }}>
                   <Icon name="check" size={14}/> Klaarzetten
                 </button>
             }

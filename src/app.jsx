@@ -22,8 +22,7 @@ const ROLES = [
 
 const NAV = {
   student: [
-    { id: 'home',     label: 'Klaargezet voor jou', icon: 'home', badge: 3 },
-    { id: 'library',  label: 'Bibliotheek', icon: 'book' },
+    { id: 'home',     label: 'Klaargezet voor jou', icon: 'home', badge: 4 },
     { id: 'history',  label: 'Geschiedenis', icon: 'clock' },
     { id: 'settings', label: 'Mijn voorlees-instellingen', icon: 'settings' },
   ],
@@ -44,6 +43,8 @@ function App() {
   const [nav, setNav] = useStateApp('home');
   const [readerDocId, setReaderDocId] = useStateApp(null);
   const [uploaderOpen, setUploaderOpen] = useStateApp(false);
+  // Dynamisch toegevoegde documenten (na upload door admin)
+  const [extraDocs, setExtraDocs] = useStateApp([]);
 
   // Reset nav when switching role
   useEffectApp(() => {
@@ -56,6 +57,13 @@ function App() {
   }, [t.dyslexicUI]);
 
   const openReader = (docId) => setReaderDocId(docId);
+
+  const handlePublish = (docEntry) => {
+    setExtraDocs(prev => [...prev, docEntry]);
+  };
+
+  const allDocs = { ...SAMPLE_TEXTS };
+  extraDocs.forEach(d => { allDocs[d.id] = d; });
 
   const currentRole = ROLES.find(r => r.id === role);
 
@@ -120,25 +128,11 @@ function App() {
           ))}
 
           <div style={{flex: 1}}></div>
-
-          <div className="card card-pad" style={{background: 'var(--surface-2)', borderColor: 'var(--border)', padding: 14, marginTop: 14}}>
-            <div className="row" style={{gap: 8, marginBottom: 6}}>
-              <Icon name="bolt" size={14} style={{color: 'var(--accent)'}}/>
-              <span style={{fontSize: 12, fontWeight: 600}}>Snel voorlezen</span>
-            </div>
-            <p style={{fontSize: 11.5, color: 'var(--muted)', margin: '0 0 8px', lineHeight: 1.5}}>
-              Plak of upload een tekst en laat hem direct voorlezen.
-            </p>
-            <button className="btn btn-sm" style={{width: '100%', justifyContent: 'center'}}>
-              <Icon name="play" size={12}/> Open snel-lezer
-            </button>
-          </div>
         </aside>
 
         <main className="main">
-          {role === 'student' && nav === 'home' && <StudentHome openReader={openReader}/>}
-          {role === 'student' && nav === 'library' && <StudentLibrary openReader={openReader}/>}
-          {role === 'student' && nav === 'history' && <StudentHistory openReader={openReader}/>}
+          {role === 'student' && nav === 'home'     && <StudentHome openReader={openReader} extraDocs={extraDocs}/>}
+          {role === 'student' && nav === 'history'  && <StudentHistory openReader={openReader}/>}
           {role === 'student' && nav === 'settings' && <StudentSettings/>}
 
           {role === 'admin' && nav === 'overview' && <AdminOverview onOpenUploader={() => setUploaderOpen(true)}/>}
@@ -153,7 +147,7 @@ function App() {
 
       {readerDocId && (
         <Reader
-          doc={SAMPLE_TEXTS[readerDocId] || SAMPLE_TEXTS.bio}
+          doc={allDocs[readerDocId] || SAMPLE_TEXTS.bio}
           onClose={() => setReaderDocId(null)}
           tweaks={{
             highlightMode: t.highlightMode,
@@ -172,7 +166,7 @@ function App() {
       {uploaderOpen && (
         <TeacherUploader
           onClose={() => setUploaderOpen(false)}
-          onPublish={() => {}}
+          onPublish={handlePublish}
         />
       )}
 

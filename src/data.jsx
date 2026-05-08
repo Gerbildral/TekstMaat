@@ -50,11 +50,10 @@ const SAMPLE_TEXTS = {
 };
 
 const STUDENT_TASKS = [
-  { id: 'bio', title: 'Biologie — Hoofdstuk 4: De cel', subject: 'Biologie', teacher: 'Klaargezet vandaag', due: 'Beschikbaar vanaf 13:30', minutes: 12, status: 'open', urgent: true },
-  { id: 'geschiedenis', title: 'Geschiedenis — De Gouden Eeuw', subject: 'Geschiedenis', teacher: 'Klaargezet vandaag', due: 'Morgen 09:00', minutes: 9, status: 'open' },
-  { id: 'english', title: 'English — Renewable energy', subject: 'Engels', teacher: 'Klaargezet vandaag', due: 'Donderdag 11:00', minutes: 7, status: 'open' },
-  { id: 'wisk-h3', title: 'Wiskunde — H3 Verhoudingen (uitleg)', subject: 'Wiskunde', teacher: 'Eigen upload', due: 'Altijd beschikbaar', minutes: 8, status: 'practice' },
-  { id: 'ned-recensie', title: 'Nederlands — Boekfragment ‘Het smelt’', subject: 'Nederlands', teacher: 'Klaargezet vandaag', due: 'Vrijdag 15:00', minutes: 14, status: 'open' },
+  { id: ‘bio’,         title: ‘Biologie — Hoofdstuk 4: De cel’,           subject: ‘Biologie’,    teacher: ‘Klaargezet door mw. Van Dijk’, due: ‘Beschikbaar vanaf 13:30’, minutes: 12, urgent: true },
+  { id: ‘geschiedenis’,title: ‘Geschiedenis — De Gouden Eeuw’,            subject: ‘Geschiedenis’, teacher: ‘Klaargezet door dhr. Bakker’,  due: ‘Morgen 09:00’,            minutes: 9 },
+  { id: ‘english’,     title: ‘English — Renewable energy’,               subject: ‘Engels’,       teacher: ‘Klaargezet door ms. O\’Connor’,due: ‘Donderdag 11:00’,         minutes: 7 },
+  { id: ‘ned-recensie’,title: ‘Nederlands — Boekfragment ‘Het smelt’’, subject: ‘Nederlands’, teacher: ‘Klaargezet door mw. Janssen’, due: ‘Vrijdag 15:00’,  minutes: 14 },
 ];
 
 const RECENT_DOCUMENTS = [
