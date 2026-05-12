@@ -4,13 +4,10 @@
  */
 
 import { handleAuth } from './routes/auth';
-import { handleSchools } from './routes/schools';
-import { handleUsers } from './routes/users';
+import { handleSchools, handleUsers, handleGroups, handleOCR } from './routes/schools';
 import { handleDocuments } from './routes/documents';
 import { handleSessions } from './routes/sessions';
-import { handleGroups } from './routes/groups';
 import { handleFiles } from './routes/files';
-import { handleOCR } from './routes/ocr';
 import { corsHeaders, errorResponse } from './utils/responses';
 import { verifyJWT } from './utils/auth';
 
