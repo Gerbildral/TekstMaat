@@ -1,0 +1,1171 @@
+<!DOCTYPE html>
+<html lang="nl" data-theme="light">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Schoolbeheer – TekstMaat</title>
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@300;400;500;600;700&display=swap">
+  <link rel="stylesheet" href="../shared/styles.css">
+  <style>
+    /* App shell */
+    .app { display: flex; min-height: 100vh; }
+
+    /* Sidebar */
+    .sidebar {
+      width: var(--sidebar-w);
+      background: var(--surface);
+      border-right: 1px solid var(--border);
+      display: flex;
+      flex-direction: column;
+      position: fixed;
+      top: 0; left: 0; bottom: 0;
+      z-index: 100;
+      transition: transform var(--transition);
+    }
+
+    .sidebar-logo {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      padding: 20px 20px 16px;
+      border-bottom: 1px solid var(--border);
+      font-weight: 700;
+      font-size: 1.0625rem;
+      color: var(--accent);
+    }
+    .sidebar-logo-icon {
+      width: 34px; height: 34px;
+      background: var(--accent);
+      border-radius: 10px;
+      display: flex; align-items: center; justify-content: center;
+    }
+
+    .sidebar-school {
+      margin: 12px 12px 4px;
+      padding: 10px 12px;
+      background: var(--surface-2);
+      border-radius: var(--radius);
+      font-size: 0.8125rem;
+    }
+    .sidebar-school-name { font-weight: 600; color: var(--text-primary); truncate: true; }
+    .sidebar-school-role { color: var(--text-muted); font-size: 0.75rem; }
+
+    .sidebar-nav {
+      flex: 1;
+      padding: 8px 12px;
+      overflow-y: auto;
+    }
+    .nav-section-label {
+      font-size: 0.6875rem;
+      font-weight: 600;
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
+      color: var(--text-muted);
+      padding: 12px 8px 6px;
+    }
+    .nav-item {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      padding: 9px 12px;
+      border-radius: var(--radius);
+      font-size: 0.9375rem;
+      font-weight: 500;
+      color: var(--text-secondary);
+      cursor: pointer;
+      transition: all var(--transition);
+      border: none;
+      background: none;
+      width: 100%;
+      text-align: left;
+    }
+    .nav-item:hover { background: var(--surface-2); color: var(--text-primary); }
+    .nav-item.active { background: var(--navy-50); color: var(--accent); }
+    [data-theme="dark"] .nav-item.active { background: rgba(64,112,200,0.15); }
+    .nav-item svg { flex-shrink: 0; }
+    .nav-badge {
+      margin-left: auto;
+      font-size: 0.6875rem;
+      font-weight: 600;
+      padding: 2px 7px;
+      border-radius: 100px;
+      background: var(--info-bg);
+      color: var(--info);
+    }
+
+    .sidebar-bottom {
+      padding: 12px;
+      border-top: 1px solid var(--border);
+    }
+    .user-info {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      padding: 8px;
+      border-radius: var(--radius);
+      cursor: pointer;
+      transition: background var(--transition);
+    }
+    .user-info:hover { background: var(--surface-2); }
+    .user-avatar {
+      width: 34px; height: 34px;
+      border-radius: 50%;
+      background: var(--navy-100);
+      color: var(--accent);
+      display: flex; align-items: center; justify-content: center;
+      font-weight: 600; font-size: 0.875rem;
+      flex-shrink: 0;
+    }
+    [data-theme="dark"] .user-avatar { background: rgba(64,112,200,0.2); }
+    .user-name { font-size: 0.875rem; font-weight: 600; }
+    .user-role { font-size: 0.75rem; color: var(--text-muted); }
+
+    /* Main content */
+    .main {
+      margin-left: var(--sidebar-w);
+      flex: 1;
+      display: flex;
+      flex-direction: column;
+      min-height: 100vh;
+    }
+
+    .topbar {
+      height: var(--header-h);
+      background: var(--surface);
+      border-bottom: 1px solid var(--border);
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 0 28px;
+      position: sticky;
+      top: 0;
+      z-index: 50;
+    }
+    .topbar-title { font-size: 1.125rem; font-weight: 600; }
+    .topbar-actions { display: flex; align-items: center; gap: 10px; }
+
+    .content { padding: 28px; flex: 1; }
+
+    /* Stats row */
+    .stats-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+      gap: 16px;
+      margin-bottom: 28px;
+    }
+    .stat-card {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: var(--radius-lg);
+      padding: 20px;
+      display: flex;
+      align-items: center;
+      gap: 16px;
+    }
+    .stat-icon {
+      width: 44px; height: 44px;
+      border-radius: var(--radius);
+      display: flex; align-items: center; justify-content: center;
+      font-size: 1.25rem;
+      flex-shrink: 0;
+    }
+    .stat-value { font-size: 1.625rem; font-weight: 700; line-height: 1; }
+    .stat-label { font-size: 0.8125rem; color: var(--text-muted); margin-top: 2px; }
+
+    /* Upload area */
+    .upload-zone {
+      border: 2px dashed var(--border);
+      border-radius: var(--radius-lg);
+      padding: 40px 24px;
+      text-align: center;
+      cursor: pointer;
+      transition: all var(--transition);
+      position: relative;
+    }
+    .upload-zone:hover, .upload-zone.drag-over {
+      border-color: var(--accent);
+      background: var(--navy-50);
+    }
+    [data-theme="dark"] .upload-zone:hover,
+    [data-theme="dark"] .upload-zone.drag-over {
+      background: rgba(64,112,200,0.08);
+    }
+    .upload-zone input[type="file"] {
+      position: absolute; inset: 0; opacity: 0; cursor: pointer;
+    }
+    .upload-icon { font-size: 2.5rem; margin-bottom: 12px; }
+    .upload-title { font-weight: 600; margin-bottom: 6px; }
+    .upload-desc { font-size: 0.875rem; color: var(--text-muted); }
+
+    /* Document list */
+    .doc-item {
+      display: flex;
+      align-items: center;
+      gap: 14px;
+      padding: 14px 16px;
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      transition: all var(--transition);
+    }
+    .doc-item:hover { border-color: var(--accent); box-shadow: var(--shadow-sm); }
+    .doc-icon {
+      width: 40px; height: 40px;
+      border-radius: var(--radius-sm);
+      background: var(--surface-2);
+      display: flex; align-items: center; justify-content: center;
+      font-size: 1.25rem;
+      flex-shrink: 0;
+    }
+    .doc-info { flex: 1; min-width: 0; }
+    .doc-name { font-weight: 600; font-size: 0.9375rem; truncate: true; }
+    .doc-meta { font-size: 0.8125rem; color: var(--text-muted); }
+    .doc-actions { display: flex; gap: 8px; }
+
+    /* Section views */
+    .section { display: none; }
+    .section.active { display: block; }
+
+    /* Progress bar */
+    .progress-bar {
+      width: 100%;
+      height: 6px;
+      background: var(--border);
+      border-radius: 3px;
+      overflow: hidden;
+    }
+    .progress-fill {
+      height: 100%;
+      background: var(--accent);
+      border-radius: 3px;
+      transition: width 300ms ease;
+    }
+
+    /* Session calendar-style list */
+    .session-item {
+      display: flex;
+      align-items: center;
+      gap: 16px;
+      padding: 14px;
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      background: var(--surface);
+      transition: all var(--transition);
+    }
+    .session-item:hover { border-color: var(--accent); }
+    .session-date {
+      text-align: center;
+      min-width: 52px;
+      padding: 6px 8px;
+      background: var(--accent);
+      color: white;
+      border-radius: var(--radius-sm);
+      font-size: 0.75rem;
+      font-weight: 600;
+      line-height: 1.4;
+    }
+    .session-status {
+      font-size: 0.75rem;
+      font-weight: 600;
+      padding: 3px 8px;
+      border-radius: 100px;
+    }
+    .status-active { background: var(--success-bg); color: var(--success); }
+    .status-upcoming { background: var(--info-bg); color: var(--info); }
+    .status-expired { background: var(--surface-2); color: var(--text-muted); }
+
+    /* Empty state */
+    .empty-state {
+      text-align: center;
+      padding: 60px 20px;
+      color: var(--text-muted);
+    }
+    .empty-state-icon { font-size: 3rem; margin-bottom: 16px; }
+
+    @media (max-width: 900px) {
+      .sidebar { transform: translateX(-100%); }
+      .sidebar.open { transform: translateX(0); }
+      .main { margin-left: 0; }
+    }
+  </style>
+</head>
+<body>
+<div class="app">
+
+  <!-- Sidebar -->
+  <aside class="sidebar" id="sidebar">
+    <div class="sidebar-logo">
+      <div class="sidebar-logo-icon">
+        <svg width="18" height="18" fill="none" stroke="white" stroke-width="2" stroke-linecap="round">
+          <path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20"/>
+          <path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z"/>
+        </svg>
+      </div>
+      TekstMaat
+    </div>
+
+    <div class="sidebar-school">
+      <div class="sidebar-school-name" id="schoolName">School laden...</div>
+      <div class="sidebar-school-role">Schoolbeheerder</div>
+    </div>
+
+    <nav class="sidebar-nav">
+      <div class="nav-section-label">Overzicht</div>
+      <button class="nav-item active" onclick="showSection('dashboard')">
+        <svg width="18" height="18" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/></svg>
+        Dashboard
+      </button>
+
+      <div class="nav-section-label">Toetsen</div>
+      <button class="nav-item" onclick="showSection('documents')">
+        <svg width="18" height="18" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14,2 14,8 20,8"/></svg>
+        Documenten
+        <span class="nav-badge" id="docCount">0</span>
+      </button>
+      <button class="nav-item" onclick="showSection('sessions')">
+        <svg width="18" height="18" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>
+        Sessies plannen
+        <span class="nav-badge" id="sessionCount">0</span>
+      </button>
+
+      <div class="nav-section-label">Studenten</div>
+      <button class="nav-item" onclick="showSection('students')">
+        <svg width="18" height="18" fill="none" stroke="currentColor" stroke-width="2"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>
+        Studenten
+      </button>
+      <button class="nav-item" onclick="showSection('groups')">
+        <svg width="18" height="18" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg>
+        Groepen
+      </button>
+
+      <div class="nav-section-label">Instellingen</div>
+      <button class="nav-item" onclick="showSection('settings')">
+        <svg width="18" height="18" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>
+        Instellingen
+      </button>
+    </nav>
+
+    <div class="sidebar-bottom">
+      <div class="flex items-center justify-between" style="padding: 0 4px; margin-bottom: 8px;">
+        <span class="text-xs text-muted">Donker thema</span>
+        <label class="toggle" aria-label="Donker thema">
+          <input type="checkbox" id="themeToggle" onchange="toggleTheme(this.checked)">
+          <span class="toggle-slider"></span>
+        </label>
+      </div>
+      <div class="user-info" onclick="logout()">
+        <div class="user-avatar" id="userAvatar">–</div>
+        <div>
+          <div class="user-name" id="userName">Laden...</div>
+          <div class="user-role">Uitloggen</div>
+        </div>
+      </div>
+    </div>
+  </aside>
+
+  <!-- Main content -->
+  <main class="main">
+    <div class="topbar">
+      <div class="topbar-title" id="topbarTitle">Dashboard</div>
+      <div class="topbar-actions">
+        <button class="btn btn-primary btn-sm" id="primaryAction" onclick="handlePrimaryAction()">
+          + Document uploaden
+        </button>
+      </div>
+    </div>
+
+    <div class="content">
+
+      <!-- === DASHBOARD === -->
+      <div class="section active" id="section-dashboard">
+        <div class="stats-grid" id="statsGrid">
+          <div class="stat-card">
+            <div class="stat-icon" style="background:var(--info-bg)">📄</div>
+            <div><div class="stat-value" id="statDocs">–</div><div class="stat-label">Documenten</div></div>
+          </div>
+          <div class="stat-card">
+            <div class="stat-icon" style="background:var(--success-bg)">📅</div>
+            <div><div class="stat-value" id="statSessions">–</div><div class="stat-label">Actieve sessies</div></div>
+          </div>
+          <div class="stat-card">
+            <div class="stat-icon" style="background:var(--warning-bg)">🎓</div>
+            <div><div class="stat-value" id="statStudents">–</div><div class="stat-label">Studenten</div></div>
+          </div>
+          <div class="stat-card">
+            <div class="stat-icon" style="background:var(--navy-50)">👥</div>
+            <div><div class="stat-value" id="statGroups">–</div><div class="stat-label">Groepen</div></div>
+          </div>
+        </div>
+
+        <div style="display:grid; grid-template-columns: 1fr 1fr; gap: 20px;">
+          <div class="card">
+            <div class="card-header">
+              <div class="card-title">Recente documenten</div>
+            </div>
+            <div id="recentDocs" style="display:flex; flex-direction:column; gap:10px;">
+              <div class="text-muted text-sm">Laden...</div>
+            </div>
+          </div>
+          <div class="card">
+            <div class="card-header">
+              <div class="card-title">Komende sessies</div>
+            </div>
+            <div id="upcomingSessions" style="display:flex; flex-direction:column; gap:10px;">
+              <div class="text-muted text-sm">Laden...</div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- === DOCUMENTEN === -->
+      <div class="section" id="section-documents">
+        <div class="card" style="margin-bottom:20px;">
+          <div class="upload-zone" id="uploadZone">
+            <input type="file" id="fileInput" accept=".pdf,.docx,.doc" multiple
+                   onchange="handleFileSelect(this.files)">
+            <div class="upload-icon">📂</div>
+            <div class="upload-title">Sleep bestanden hierheen of klik om te kiezen</div>
+            <div class="upload-desc">PDF, DOCX en DOC bestanden • Max 50MB per bestand</div>
+          </div>
+          <div id="uploadProgress" style="display:none; margin-top:16px;">
+            <div style="display:flex; justify-content:space-between; margin-bottom:6px;">
+              <span class="text-sm font-medium" id="uploadFilename">Uploaden...</span>
+              <span class="text-sm text-muted" id="uploadPercent">0%</span>
+            </div>
+            <div class="progress-bar"><div class="progress-fill" id="progressFill" style="width:0%"></div></div>
+          </div>
+        </div>
+
+        <div style="display:flex; align-items:center; justify-content:space-between; margin-bottom:16px;">
+          <h3>Geüploade documenten</h3>
+          <input class="form-input" style="width:240px;" type="search"
+                 placeholder="Zoeken..." oninput="filterDocuments(this.value)">
+        </div>
+
+        <div id="documentsList" style="display:flex; flex-direction:column; gap:10px;">
+          <div class="text-muted">Laden...</div>
+        </div>
+      </div>
+
+      <!-- === SESSIES === -->
+      <div class="section" id="section-sessions">
+        <div style="display:flex; align-items:center; justify-content:space-between; margin-bottom:20px;">
+          <div>
+            <h3>Toetssessies</h3>
+            <p class="text-sm text-muted">Plan wanneer studenten documenten kunnen beluisteren</p>
+          </div>
+        </div>
+
+        <div id="sessionsList" style="display:flex; flex-direction:column; gap:10px;">
+          <div class="text-muted">Laden...</div>
+        </div>
+      </div>
+
+      <!-- === STUDENTEN === -->
+      <div class="section" id="section-students">
+        <div style="display:flex; align-items:center; justify-content:space-between; margin-bottom:20px;">
+          <div>
+            <h3>Studenten</h3>
+            <p class="text-sm text-muted">Beheer je studenten en hun toegang</p>
+          </div>
+          <input class="form-input" style="width:240px;" type="search"
+                 placeholder="Zoeken op naam of nummer...">
+        </div>
+        <div class="table-container">
+          <table>
+            <thead>
+              <tr>
+                <th>Naam</th>
+                <th>Studentnummer</th>
+                <th>E-mail</th>
+                <th>Status</th>
+                <th>Acties</th>
+              </tr>
+            </thead>
+            <tbody id="studentsTable">
+              <tr><td colspan="5" class="text-muted">Laden...</td></tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+
+      <!-- === GROEPEN === -->
+      <div class="section" id="section-groups">
+        <div style="display:flex; align-items:center; justify-content:space-between; margin-bottom:20px;">
+          <div>
+            <h3>Groepen / Klassen</h3>
+            <p class="text-sm text-muted">Groepeer studenten voor eenvoudige toewijzing</p>
+          </div>
+        </div>
+        <div id="groupsList" style="display:grid; grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); gap:16px;">
+          <div class="text-muted">Laden...</div>
+        </div>
+      </div>
+
+      <!-- === INSTELLINGEN === -->
+      <div class="section" id="section-settings">
+        <div class="card" style="max-width: 560px;">
+          <h3 style="margin-bottom:20px;">Schoolinstellingen</h3>
+          <div style="display:flex; flex-direction:column; gap:20px;">
+            <div class="form-group">
+              <label class="form-label">Schoolnaam</label>
+              <input class="form-input" id="settingSchoolName" readonly>
+            </div>
+            <div class="form-group">
+              <label class="form-label">Toegestane talen</label>
+              <div id="languageToggles" style="display:flex; gap:12px; flex-wrap:wrap; margin-top:4px;"></div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+    </div><!-- .content -->
+  </main>
+</div><!-- .app -->
+
+<!-- === MODALS === -->
+
+<!-- Upload bestand modal -->
+<div class="modal-overlay" id="uploadModal" style="display:none;">
+  <div class="modal">
+    <div class="modal-header">
+      <h3 class="modal-title">Document uploaden</h3>
+      <button class="btn btn-ghost btn-icon" onclick="closeModal('uploadModal')">✕</button>
+    </div>
+    <div style="display:flex; flex-direction:column; gap:16px;">
+      <div class="form-group">
+        <label class="form-label required">Titel</label>
+        <input class="form-input" id="uploadTitle" placeholder="Bijv. Wiskunde B - Proefexamen 2024">
+      </div>
+      <div class="form-group">
+        <label class="form-label">Omschrijving (optioneel)</label>
+        <textarea class="form-input form-textarea" id="uploadDesc" rows="2" placeholder="Extra informatie voor jezelf"></textarea>
+      </div>
+      <div class="form-group">
+        <label class="form-label">Standaard taal voor voorlezen</label>
+        <select class="form-input form-select" id="uploadLanguage">
+          <option value="nl">Nederlands</option>
+          <option value="en">Engels</option>
+          <option value="de">Duits</option>
+          <option value="fr">Frans</option>
+          <option value="es">Spaans</option>
+        </select>
+      </div>
+      <div class="alert alert-info">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><line x1="12" y1="16" x2="12" y2="12"/><line x1="12" y1="8" x2="12.01" y2="8"/></svg>
+        <span id="uploadFileInfo">Bestand: –</span>
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-secondary" onclick="closeModal('uploadModal')">Annuleren</button>
+      <button class="btn btn-primary" onclick="confirmUpload()">Uploaden</button>
+    </div>
+  </div>
+</div>
+
+<!-- Sessie aanmaken modal -->
+<div class="modal-overlay" id="sessionModal" style="display:none;">
+  <div class="modal" style="max-width:640px;">
+    <div class="modal-header">
+      <h3 class="modal-title">Nieuwe toetssessie</h3>
+      <button class="btn btn-ghost btn-icon" onclick="closeModal('sessionModal')">✕</button>
+    </div>
+    <div style="display:grid; grid-template-columns:1fr 1fr; gap:16px;">
+      <div class="form-group" style="grid-column:1/-1;">
+        <label class="form-label required">Sessietitel</label>
+        <input class="form-input" id="sessionTitle" placeholder="Bijv. Eindexamen Wiskunde B - 2024">
+      </div>
+      <div class="form-group" style="grid-column:1/-1;">
+        <label class="form-label required">Document</label>
+        <select class="form-input form-select" id="sessionDocument">
+          <option value="">Kies een document...</option>
+        </select>
+      </div>
+      <div class="form-group">
+        <label class="form-label required">Beschikbaar vanaf</label>
+        <input class="form-input" type="datetime-local" id="sessionFrom">
+      </div>
+      <div class="form-group">
+        <label class="form-label required">Beschikbaar tot</label>
+        <input class="form-input" type="datetime-local" id="sessionUntil">
+      </div>
+      <div class="form-group" style="grid-column:1/-1;">
+        <label class="form-label">Instructies voor studenten (optioneel)</label>
+        <textarea class="form-input form-textarea" id="sessionInstructions" rows="2"
+                  placeholder="Bijv. Gebruik alleen de voorleesfunctie, schrijf geen antwoorden hier."></textarea>
+      </div>
+      <div class="form-group" style="grid-column:1/-1;">
+        <label class="form-label">Toegang voor groepen</label>
+        <div id="sessionGroupSelect" style="display:flex; gap:8px; flex-wrap:wrap;"></div>
+      </div>
+      <div style="display:flex; align-items:center; justify-content:space-between;">
+        <span class="text-sm font-medium">Snelheidsregeling toestaan</span>
+        <label class="toggle"><input type="checkbox" id="sessionSpeed" checked><span class="toggle-slider"></span></label>
+      </div>
+      <div style="display:flex; align-items:center; justify-content:space-between;">
+        <span class="text-sm font-medium">Stemkeuze toestaan</span>
+        <label class="toggle"><input type="checkbox" id="sessionVoice" checked><span class="toggle-slider"></span></label>
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-secondary" onclick="closeModal('sessionModal')">Annuleren</button>
+      <button class="btn btn-primary" onclick="createSession()">Sessie aanmaken</button>
+    </div>
+  </div>
+</div>
+
+<!-- Student toevoegen modal -->
+<div class="modal-overlay" id="studentModal" style="display:none;">
+  <div class="modal">
+    <div class="modal-header">
+      <h3 class="modal-title">Student toevoegen</h3>
+      <button class="btn btn-ghost btn-icon" onclick="closeModal('studentModal')">✕</button>
+    </div>
+    <div style="display:flex; flex-direction:column; gap:16px;">
+      <div style="display:grid; grid-template-columns:1fr 1fr; gap:16px;">
+        <div class="form-group">
+          <label class="form-label required">Voornaam</label>
+          <input class="form-input" id="studentFirst" placeholder="Jan">
+        </div>
+        <div class="form-group">
+          <label class="form-label required">Achternaam</label>
+          <input class="form-input" id="studentLast" placeholder="de Vries">
+        </div>
+      </div>
+      <div class="form-group">
+        <label class="form-label required">E-mailadres</label>
+        <input class="form-input" type="email" id="studentEmail" placeholder="jan@school.nl">
+      </div>
+      <div class="form-group">
+        <label class="form-label">Studentnummer</label>
+        <input class="form-input" id="studentNumber" placeholder="s1234567">
+      </div>
+      <div class="form-group">
+        <label class="form-label required">Tijdelijk wachtwoord</label>
+        <input class="form-input" id="studentPassword" placeholder="Min. 8 tekens">
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-secondary" onclick="closeModal('studentModal')">Annuleren</button>
+      <button class="btn btn-primary" onclick="createStudent()">Toevoegen</button>
+    </div>
+  </div>
+</div>
+
+<!-- Toast container -->
+<div class="toast-container" id="toastContainer"></div>
+
+<script>
+  // ============ STATE ============
+  const API = window.location.origin;
+  let user = null;
+  let token = null;
+  let documents = [];
+  let sessions = [];
+  let groups = [];
+  let currentSection = 'dashboard';
+  let pendingFile = null;
+
+  // ============ INIT ============
+  async function init() {
+    token = localStorage.getItem('lb_token');
+    user = JSON.parse(localStorage.getItem('lb_user') || 'null');
+
+    if (!token || !user || user.role !== 'schooladmin') {
+      window.location.href = '/login.html';
+      return;
+    }
+
+    // Thema
+    const theme = localStorage.getItem('lb_theme') || 'light';
+    document.documentElement.setAttribute('data-theme', theme);
+    document.getElementById('themeToggle').checked = theme === 'dark';
+
+    // User info
+    document.getElementById('userName').textContent = `${user.first_name} ${user.last_name}`;
+    document.getElementById('userAvatar').textContent = user.first_name[0] + user.last_name[0];
+    document.getElementById('schoolName').textContent = user.school?.name || 'School';
+
+    await Promise.all([loadDocuments(), loadSessions(), loadStudents(), loadGroups()]);
+    renderDashboard();
+  }
+
+  // ============ API HELPER ============
+  async function api(path, options = {}) {
+    const res = await fetch(`${API}/api${path}`, {
+      ...options,
+      headers: {
+        'Authorization': `Bearer ${token}`,
+        'Content-Type': 'application/json',
+        ...(options.headers || {}),
+      },
+    });
+    if (res.status === 401) { logout(); return null; }
+    return res.json();
+  }
+
+  // ============ DATA LOADING ============
+  async function loadDocuments() {
+    const data = await api('/documents');
+    if (data?.success) {
+      documents = data.data;
+      document.getElementById('docCount').textContent = documents.length;
+      renderDocuments();
+    }
+  }
+
+  async function loadSessions() {
+    const data = await api('/sessions');
+    if (data?.success) {
+      sessions = data.data;
+      const active = sessions.filter(s => new Date(s.available_until) > new Date()).length;
+      document.getElementById('sessionCount').textContent = active;
+      renderSessions();
+    }
+  }
+
+  async function loadStudents() {
+    const data = await api('/users?role=student');
+    if (data?.success) {
+      document.getElementById('statStudents').textContent = data.data.length;
+      renderStudents(data.data);
+    }
+  }
+
+  async function loadGroups() {
+    const data = await api('/groups');
+    if (data?.success) {
+      groups = data.data;
+      document.getElementById('statGroups').textContent = groups.length;
+      renderGroups();
+    }
+  }
+
+  // ============ RENDER FUNCTIONS ============
+  function renderDashboard() {
+    document.getElementById('statDocs').textContent = documents.length;
+
+    // Recente documenten
+    const recentHtml = documents.slice(0, 4).map(doc => `
+      <div class="doc-item" style="padding:10px 12px;">
+        <div class="doc-icon">${doc.file_type === 'pdf' ? '📕' : '📘'}</div>
+        <div class="doc-info">
+          <div class="doc-name">${esc(doc.title)}</div>
+          <div class="doc-meta">${formatDate(doc.created_at)} • ${ocrBadge(doc.ocr_status)}</div>
+        </div>
+      </div>
+    `).join('') || '<div class="text-muted text-sm">Geen documenten</div>';
+    document.getElementById('recentDocs').innerHTML = recentHtml;
+
+    // Komende sessies
+    const upcoming = sessions.filter(s => new Date(s.available_until) > new Date()).slice(0, 4);
+    const sessHtml = upcoming.map(s => `
+      <div class="session-item" style="padding:10px 12px;">
+        <div class="session-date" style="min-width:44px; font-size:0.6875rem;">${formatShortDate(s.available_from)}</div>
+        <div style="flex:1; min-width:0;">
+          <div class="font-medium text-sm" style="white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">${esc(s.title)}</div>
+          <div class="text-xs text-muted">${esc(s.document_title || '')}</div>
+        </div>
+        <span class="session-status ${getSessionStatusClass(s)}">${getSessionStatus(s)}</span>
+      </div>
+    `).join('') || '<div class="text-muted text-sm">Geen komende sessies</div>';
+    document.getElementById('upcomingSessions').innerHTML = sessHtml;
+  }
+
+  function renderDocuments(filter = '') {
+    const filtered = filter
+      ? documents.filter(d => d.title.toLowerCase().includes(filter.toLowerCase()))
+      : documents;
+
+    if (!filtered.length) {
+      document.getElementById('documentsList').innerHTML = `
+        <div class="empty-state">
+          <div class="empty-state-icon">📂</div>
+          <div class="font-medium">Nog geen documenten</div>
+          <div class="text-sm text-muted mt-2">Upload je eerste toetsdocument via de zone hierboven.</div>
+        </div>`;
+      return;
+    }
+
+    document.getElementById('documentsList').innerHTML = filtered.map(doc => `
+      <div class="doc-item">
+        <div class="doc-icon">${doc.file_type === 'pdf' ? '📕' : '📘'}</div>
+        <div class="doc-info">
+          <div class="doc-name">${esc(doc.title)}</div>
+          <div class="doc-meta">
+            ${formatFileSize(doc.file_size)} • Geüpload ${formatDate(doc.created_at)}
+            ${doc.page_count ? ` • ${doc.page_count} pagina's` : ''}
+            ${doc.language ? ` • ${langLabel(doc.language)}` : ''}
+          </div>
+        </div>
+        <div style="display:flex; align-items:center; gap:10px;">
+          ${ocrBadge(doc.ocr_status)}
+          <button class="btn btn-secondary btn-sm" onclick="planSession('${doc.id}', '${esc(doc.title)}')">Inplannen</button>
+          <button class="btn btn-ghost btn-sm btn-icon" onclick="deleteDocument('${doc.id}')" title="Verwijderen">🗑️</button>
+        </div>
+      </div>
+    `).join('');
+  }
+
+  function renderSessions() {
+    if (!sessions.length) {
+      document.getElementById('sessionsList').innerHTML = `
+        <div class="empty-state">
+          <div class="empty-state-icon">📅</div>
+          <div class="font-medium">Geen sessies gepland</div>
+          <div class="text-sm text-muted mt-2">Maak een sessie aan om studenten toegang te geven tot een document.</div>
+          <button class="btn btn-primary mt-4" onclick="showModal('sessionModal')">+ Sessie aanmaken</button>
+        </div>`;
+      return;
+    }
+
+    const sorted = [...sessions].sort((a, b) => new Date(b.available_from) - new Date(a.available_from));
+    document.getElementById('sessionsList').innerHTML = sorted.map(s => `
+      <div class="session-item">
+        <div class="session-date">${formatShortDate(s.available_from)}</div>
+        <div style="flex:1; min-width:0;">
+          <div class="font-medium">${esc(s.title)}</div>
+          <div class="text-sm text-muted">${esc(s.document_title || '–')} • ${formatDate(s.available_from)} – ${formatDate(s.available_until)}</div>
+        </div>
+        <span class="session-status ${getSessionStatusClass(s)}">${getSessionStatus(s)}</span>
+        <button class="btn btn-ghost btn-sm btn-icon" onclick="deleteSession('${s.id}')" title="Verwijderen">🗑️</button>
+      </div>
+    `).join('');
+  }
+
+  function renderStudents(students) {
+    document.getElementById('studentsTable').innerHTML = students.map(s => `
+      <tr>
+        <td>${esc(s.first_name)} ${esc(s.last_name)}</td>
+        <td><code style="font-family:var(--font-mono); font-size:0.8125rem;">${esc(s.student_number || '–')}</code></td>
+        <td>${esc(s.email)}</td>
+        <td><span class="badge ${s.is_active ? 'badge-green' : 'badge-gray'}">${s.is_active ? 'Actief' : 'Inactief'}</span></td>
+        <td>
+          <button class="btn btn-ghost btn-sm btn-icon" title="Bewerken">✏️</button>
+          <button class="btn btn-ghost btn-sm btn-icon" onclick="deleteUser('${s.id}')" title="Deactiveren">🗑️</button>
+        </td>
+      </tr>
+    `).join('') || '<tr><td colspan="5" class="text-muted">Geen studenten gevonden</td></tr>';
+  }
+
+  function renderGroups() {
+    document.getElementById('groupsList').innerHTML = groups.map(g => `
+      <div class="card">
+        <div class="card-header" style="margin-bottom:12px;">
+          <div>
+            <div class="font-semibold">${esc(g.name)}</div>
+            <div class="text-sm text-muted">${g.member_count || 0} studenten</div>
+          </div>
+          <button class="btn btn-ghost btn-sm btn-icon">✏️</button>
+        </div>
+        <button class="btn btn-secondary btn-sm" style="width:100%;">Beheer leden</button>
+      </div>
+    `).join('') || '<div class="text-muted">Geen groepen aangemaakt</div>';
+  }
+
+  // ============ NAVIGATION ============
+  function showSection(name) {
+    document.querySelectorAll('.section').forEach(s => s.classList.remove('active'));
+    document.querySelectorAll('.nav-item').forEach(n => n.classList.remove('active'));
+
+    document.getElementById(`section-${name}`)?.classList.add('active');
+    document.querySelectorAll('.nav-item').forEach(n => {
+      if (n.getAttribute('onclick')?.includes(`'${name}'`)) n.classList.add('active');
+    });
+
+    currentSection = name;
+
+    const titles = {
+      dashboard: 'Dashboard',
+      documents: 'Documenten',
+      sessions: 'Toetssessies',
+      students: 'Studenten',
+      groups: 'Groepen',
+      settings: 'Instellingen',
+    };
+    document.getElementById('topbarTitle').textContent = titles[name] || name;
+
+    const primaryLabels = {
+      dashboard: '+ Document uploaden',
+      documents: '+ Document uploaden',
+      sessions: '+ Sessie aanmaken',
+      students: '+ Student toevoegen',
+      groups: '+ Groep aanmaken',
+      settings: null,
+    };
+    const btn = document.getElementById('primaryAction');
+    const label = primaryLabels[name];
+    btn.style.display = label ? 'flex' : 'none';
+    if (label) btn.textContent = label;
+  }
+
+  function handlePrimaryAction() {
+    if (currentSection === 'sessions') showModal('sessionModal');
+    else if (currentSection === 'students') showModal('studentModal');
+    else document.getElementById('fileInput').click();
+  }
+
+  // ============ FILE UPLOAD ============
+  function handleFileSelect(files) {
+    if (!files.length) return;
+    const file = files[0];
+    pendingFile = file;
+    document.getElementById('uploadTitle').value = file.name.replace(/\.(pdf|docx|doc)$/i, '');
+    document.getElementById('uploadFileInfo').textContent = `Bestand: ${file.name} (${formatFileSize(file.size)})`;
+    showModal('uploadModal');
+  }
+
+  async function confirmUpload() {
+    if (!pendingFile) return;
+    const title = document.getElementById('uploadTitle').value.trim();
+    if (!title) { toast('Voer een titel in', 'error'); return; }
+
+    closeModal('uploadModal');
+    showSection('documents');
+
+    const formData = new FormData();
+    formData.append('file', pendingFile);
+    formData.append('title', title);
+    formData.append('description', document.getElementById('uploadDesc').value);
+    formData.append('language', document.getElementById('uploadLanguage').value);
+
+    document.getElementById('uploadProgress').style.display = 'block';
+    document.getElementById('uploadFilename').textContent = pendingFile.name;
+
+    try {
+      // Simuleer voortgang
+      let pct = 0;
+      const interval = setInterval(() => {
+        pct = Math.min(pct + 15, 85);
+        document.getElementById('progressFill').style.width = pct + '%';
+        document.getElementById('uploadPercent').textContent = pct + '%';
+      }, 300);
+
+      const res = await fetch(`${API}/api/documents`, {
+        method: 'POST',
+        headers: { 'Authorization': `Bearer ${token}` },
+        body: formData,
+      });
+
+      clearInterval(interval);
+      const data = await res.json();
+
+      document.getElementById('progressFill').style.width = '100%';
+      document.getElementById('uploadPercent').textContent = '100%';
+
+      setTimeout(() => {
+        document.getElementById('uploadProgress').style.display = 'none';
+      }, 1000);
+
+      if (data.success) {
+        toast('Document geüpload! Tekst wordt verwerkt...', 'success');
+        await loadDocuments();
+      } else {
+        toast(data.message || 'Upload mislukt', 'error');
+      }
+    } catch {
+      toast('Uploadfout. Probeer opnieuw.', 'error');
+      document.getElementById('uploadProgress').style.display = 'none';
+    }
+
+    pendingFile = null;
+  }
+
+  // Drag and drop
+  const uploadZone = document.getElementById('uploadZone');
+  uploadZone.addEventListener('dragover', e => { e.preventDefault(); uploadZone.classList.add('drag-over'); });
+  uploadZone.addEventListener('dragleave', () => uploadZone.classList.remove('drag-over'));
+  uploadZone.addEventListener('drop', e => {
+    e.preventDefault();
+    uploadZone.classList.remove('drag-over');
+    handleFileSelect(e.dataTransfer.files);
+  });
+
+  // ============ SESSIONS ============
+  function planSession(docId, docTitle) {
+    showSection('sessions');
+    showModal('sessionModal');
+    // Vul document al in
+    setTimeout(() => {
+      const sel = document.getElementById('sessionDocument');
+      sel.value = docId;
+      document.getElementById('sessionTitle').value = docTitle;
+    }, 100);
+  }
+
+  async function createSession() {
+    const title = document.getElementById('sessionTitle').value.trim();
+    const docId = document.getElementById('sessionDocument').value;
+    const from = document.getElementById('sessionFrom').value;
+    const until = document.getElementById('sessionUntil').value;
+
+    if (!title || !docId || !from || !until) {
+      toast('Vul alle verplichte velden in', 'error');
+      return;
+    }
+
+    // Geselecteerde groepen
+    const groupIds = [...document.querySelectorAll('[data-group-checkbox]:checked')].map(cb => cb.value);
+
+    const data = await api('/sessions', {
+      method: 'POST',
+      body: JSON.stringify({
+        title, document_id: docId,
+        available_from: new Date(from).toISOString(),
+        available_until: new Date(until).toISOString(),
+        instructions: document.getElementById('sessionInstructions').value,
+        allow_speed_control: document.getElementById('sessionSpeed').checked,
+        allow_voice_selection: document.getElementById('sessionVoice').checked,
+        group_ids: groupIds,
+      }),
+    });
+
+    if (data?.success) {
+      toast('Sessie aangemaakt!', 'success');
+      closeModal('sessionModal');
+      await loadSessions();
+    } else {
+      toast(data?.message || 'Fout bij aanmaken', 'error');
+    }
+  }
+
+  async function deleteSession(id) {
+    if (!confirm('Deze sessie verwijderen? Studenten verliezen toegang.')) return;
+    const data = await api(`/sessions/${id}`, { method: 'DELETE' });
+    if (data?.success) { toast('Sessie verwijderd', 'success'); await loadSessions(); }
+  }
+
+  async function deleteDocument(id) {
+    if (!confirm('Dit document verwijderen?')) return;
+    const data = await api(`/documents/${id}`, { method: 'DELETE' });
+    if (data?.success) { toast('Document verwijderd', 'success'); await loadDocuments(); }
+  }
+
+  async function createStudent() {
+    const body = {
+      first_name: document.getElementById('studentFirst').value.trim(),
+      last_name: document.getElementById('studentLast').value.trim(),
+      email: document.getElementById('studentEmail').value.trim(),
+      student_number: document.getElementById('studentNumber').value.trim(),
+      password: document.getElementById('studentPassword').value,
+      role: 'student',
+    };
+    if (!body.first_name || !body.last_name || !body.email || !body.password) {
+      toast('Vul alle verplichte velden in', 'error');
+      return;
+    }
+    const data = await api('/users', { method: 'POST', body: JSON.stringify(body) });
+    if (data?.success) {
+      toast('Student toegevoegd!', 'success');
+      closeModal('studentModal');
+      await loadStudents();
+    } else {
+      toast(data?.message || 'Fout bij toevoegen', 'error');
+    }
+  }
+
+  // ============ MODALS ============
+  function showModal(id) {
+    // Vul sessie document dropdown
+    if (id === 'sessionModal') {
+      const sel = document.getElementById('sessionDocument');
+      const current = sel.value;
+      sel.innerHTML = '<option value="">Kies een document...</option>' +
+        documents.filter(d => d.ocr_status === 'done').map(d =>
+          `<option value="${d.id}">${esc(d.title)}</option>`
+        ).join('');
+      if (current) sel.value = current;
+
+      // Groep checkboxes
+      document.getElementById('sessionGroupSelect').innerHTML = groups.map(g => `
+        <label style="display:flex; align-items:center; gap:6px; font-size:0.875rem; cursor:pointer;">
+          <input type="checkbox" data-group-checkbox value="${g.id}">
+          ${esc(g.name)} (${g.member_count || 0})
+        </label>
+      `).join('') || '<span class="text-sm text-muted">Geen groepen beschikbaar</span>';
+    }
+
+    document.getElementById(id).style.display = 'flex';
+  }
+
+  function closeModal(id) {
+    document.getElementById(id).style.display = 'none';
+  }
+
+  // Sluit modal bij klik buiten
+  document.querySelectorAll('.modal-overlay').forEach(overlay => {
+    overlay.addEventListener('click', e => {
+      if (e.target === overlay) overlay.style.display = 'none';
+    });
+  });
+
+  // ============ HELPERS ============
+  function filterDocuments(q) { renderDocuments(q); }
+  function toggleTheme(dark) {
+    const t = dark ? 'dark' : 'light';
+    document.documentElement.setAttribute('data-theme', t);
+    localStorage.setItem('lb_theme', t);
+  }
+  function logout() {
+    localStorage.removeItem('lb_token');
+    localStorage.removeItem('lb_user');
+    window.location.href = '/login.html';
+  }
+  function esc(str) {
+    return String(str || '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+  }
+  function formatDate(iso) {
+    if (!iso) return '–';
+    return new Date(iso).toLocaleDateString('nl-NL', { day: 'numeric', month: 'short', year: 'numeric' });
+  }
+  function formatShortDate(iso) {
+    if (!iso) return '–';
+    const d = new Date(iso);
+    return d.toLocaleDateString('nl-NL', { day: 'numeric', month: 'short' }).replace(' ', '\n');
+  }
+  function formatFileSize(bytes) {
+    if (!bytes) return '–';
+    if (bytes < 1024) return bytes + ' B';
+    if (bytes < 1024*1024) return (bytes/1024).toFixed(1) + ' KB';
+    return (bytes/1024/1024).toFixed(1) + ' MB';
+  }
+  function ocrBadge(status) {
+    const map = {
+      pending: '<span class="badge badge-gray">⏳ Wachten</span>',
+      processing: '<span class="badge badge-blue">⚙️ Verwerken</span>',
+      done: '<span class="badge badge-green">✅ Gereed</span>',
+      failed: '<span class="badge badge-red">❌ Fout</span>',
+    };
+    return map[status] || status;
+  }
+  function getSessionStatus(s) {
+    const now = new Date();
+    if (new Date(s.available_until) < now) return 'Verlopen';
+    if (new Date(s.available_from) > now) return 'Gepland';
+    return 'Actief';
+  }
+  function getSessionStatusClass(s) {
+    const st = getSessionStatus(s);
+    if (st === 'Actief') return 'status-active';
+    if (st === 'Gepland') return 'status-upcoming';
+    return 'status-expired';
+  }
+  function langLabel(code) {
+    const map = { nl: '🇳🇱 NL', en: '🇬🇧 EN', de: '🇩🇪 DE', fr: '🇫🇷 FR', es: '🇪🇸 ES' };
+    return map[code] || code;
+  }
+  function toast(msg, type = 'info') {
+    const container = document.getElementById('toastContainer');
+    const el = document.createElement('div');
+    el.className = `toast toast-${type}`;
+    const icons = { success: '✅', error: '❌', info: 'ℹ️' };
+    el.innerHTML = `<span>${icons[type] || ''}</span> ${esc(msg)}`;
+    container.appendChild(el);
+    setTimeout(() => el.remove(), 4000);
+  }
+
+  // ============ START ============
+  init();
+</script>
+</body>
+</html>

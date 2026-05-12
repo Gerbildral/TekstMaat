@@ -1,0 +1,1156 @@
+<!DOCTYPE html>
+<html lang="nl" data-theme="light">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>TekstMaat – Mijn Toetsen</title>
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@300;400;500;600;700&display=swap">
+  <link rel="stylesheet" href="../shared/styles.css">
+  <!-- PDF.js voor PDF rendering -->
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
+  <style>
+    /* Student-specifieke stijlen */
+    body { overflow: hidden; }
+
+    /* Sessie selectie scherm */
+    .session-picker {
+      min-height: 100vh;
+      display: flex;
+      flex-direction: column;
+    }
+    .session-picker-header {
+      background: var(--surface);
+      border-bottom: 1px solid var(--border);
+      padding: 16px 24px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+    }
+    .session-picker-logo {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      font-weight: 700;
+      color: var(--accent);
+      font-size: 1.0625rem;
+    }
+    .session-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
+      gap: 16px;
+      padding: 28px;
+    }
+    .session-card {
+      background: var(--surface);
+      border: 1.5px solid var(--border);
+      border-radius: var(--radius-lg);
+      padding: 22px;
+      cursor: pointer;
+      transition: all var(--transition);
+      position: relative;
+    }
+    .session-card:hover {
+      border-color: var(--accent);
+      box-shadow: var(--shadow);
+      transform: translateY(-2px);
+    }
+    .session-card-icon {
+      font-size: 2rem;
+      margin-bottom: 12px;
+    }
+    .session-card-title { font-size: 1.0625rem; font-weight: 600; margin-bottom: 6px; }
+    .session-card-meta { font-size: 0.875rem; color: var(--text-muted); }
+    .session-card-until {
+      margin-top: 14px;
+      font-size: 0.8125rem;
+      padding: 6px 10px;
+      background: var(--success-bg);
+      color: var(--success);
+      border-radius: var(--radius-sm);
+      display: inline-block;
+      font-weight: 500;
+    }
+
+    /* Reader scherm */
+    .reader { display: none; height: 100vh; flex-direction: column; }
+    .reader.active { display: flex; }
+
+    /* Reader topbar */
+    .reader-topbar {
+      height: 56px;
+      background: var(--navy-800);
+      color: white;
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      padding: 0 16px;
+      flex-shrink: 0;
+    }
+    [data-theme="dark"] .reader-topbar { background: #060E1F; }
+    .reader-topbar-title {
+      font-size: 0.9375rem;
+      font-weight: 600;
+      flex: 1;
+      min-width: 0;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+    .reader-topbar-btn {
+      background: rgba(255,255,255,0.12);
+      border: 1px solid rgba(255,255,255,0.2);
+      color: white;
+      padding: 7px 12px;
+      border-radius: var(--radius-sm);
+      cursor: pointer;
+      font-size: 0.875rem;
+      font-family: var(--font);
+      font-weight: 500;
+      transition: background var(--transition);
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      white-space: nowrap;
+    }
+    .reader-topbar-btn:hover { background: rgba(255,255,255,0.2); }
+
+    /* TTS Control bar */
+    .tts-bar {
+      background: var(--surface);
+      border-bottom: 1px solid var(--border);
+      padding: 10px 16px;
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      flex-shrink: 0;
+      flex-wrap: wrap;
+    }
+
+    /* Grote speelknop */
+    .play-btn {
+      width: 42px; height: 42px;
+      border-radius: 50%;
+      background: var(--accent);
+      color: white;
+      border: none;
+      cursor: pointer;
+      display: flex; align-items: center; justify-content: center;
+      font-size: 1.125rem;
+      transition: all var(--transition);
+      flex-shrink: 0;
+    }
+    .play-btn:hover { background: var(--accent-mid); transform: scale(1.05); }
+    .play-btn:active { transform: scale(0.97); }
+
+    .tts-controls {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+    .tts-control-btn {
+      background: var(--surface-2);
+      border: 1px solid var(--border);
+      color: var(--text-secondary);
+      padding: 7px 10px;
+      border-radius: var(--radius-sm);
+      cursor: pointer;
+      font-size: 0.875rem;
+      font-family: var(--font);
+      transition: all var(--transition);
+      display: flex; align-items: center; gap: 4px;
+    }
+    .tts-control-btn:hover { background: var(--navy-50); color: var(--accent); border-color: var(--accent); }
+    [data-theme="dark"] .tts-control-btn:hover { background: rgba(64,112,200,0.15); }
+
+    /* Speed control */
+    .speed-display {
+      font-size: 0.875rem;
+      font-weight: 600;
+      color: var(--accent);
+      min-width: 38px;
+      text-align: center;
+    }
+    input[type="range"].speed-slider {
+      width: 100px;
+      accent-color: var(--accent);
+    }
+
+    /* Language select */
+    .tts-lang-select {
+      padding: 7px 10px;
+      border: 1px solid var(--border);
+      border-radius: var(--radius-sm);
+      background: var(--surface);
+      color: var(--text-primary);
+      font-family: var(--font);
+      font-size: 0.875rem;
+      cursor: pointer;
+    }
+
+    /* Voice select */
+    .tts-voice-select {
+      padding: 7px 10px;
+      border: 1px solid var(--border);
+      border-radius: var(--radius-sm);
+      background: var(--surface);
+      color: var(--text-primary);
+      font-family: var(--font);
+      font-size: 0.875rem;
+      cursor: pointer;
+      max-width: 180px;
+    }
+
+    /* Voorlees progress */
+    .tts-progress {
+      flex: 1;
+      min-width: 100px;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+    .tts-progress-bar {
+      flex: 1;
+      height: 4px;
+      background: var(--border);
+      border-radius: 2px;
+      cursor: pointer;
+      position: relative;
+    }
+    .tts-progress-fill {
+      height: 100%;
+      background: var(--accent);
+      border-radius: 2px;
+      transition: width 100ms;
+    }
+    .tts-time { font-size: 0.75rem; color: var(--text-muted); white-space: nowrap; }
+
+    /* PDF viewer area */
+    .reader-body {
+      flex: 1;
+      overflow: hidden;
+      display: flex;
+    }
+
+    /* Pagina navigatie zijbalk */
+    .page-sidebar {
+      width: 120px;
+      background: var(--surface-2);
+      border-right: 1px solid var(--border);
+      overflow-y: auto;
+      padding: 8px;
+      display: flex;
+      flex-direction: column;
+      gap: 6px;
+      flex-shrink: 0;
+    }
+    .page-thumb {
+      border: 2px solid var(--border);
+      border-radius: var(--radius-sm);
+      cursor: pointer;
+      overflow: hidden;
+      transition: border-color var(--transition);
+    }
+    .page-thumb:hover { border-color: var(--accent-lit); }
+    .page-thumb.active { border-color: var(--accent); }
+    .page-thumb canvas { width: 100%; height: auto; display: block; }
+    .page-thumb-num {
+      text-align: center;
+      font-size: 0.6875rem;
+      color: var(--text-muted);
+      padding: 2px;
+    }
+
+    /* Hoofd PDF canvas */
+    .pdf-viewport {
+      flex: 1;
+      overflow-y: auto;
+      overflow-x: auto;
+      background: #525659;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      padding: 20px;
+      gap: 16px;
+      position: relative;
+    }
+
+    .pdf-page-wrapper {
+      position: relative;
+      box-shadow: 0 4px 20px rgba(0,0,0,0.4);
+      border-radius: 2px;
+    }
+
+    .pdf-page-canvas {
+      display: block;
+    }
+
+    /* Text highlight overlay */
+    .highlight-overlay {
+      position: absolute;
+      top: 0; left: 0;
+      pointer-events: none;
+      z-index: 10;
+    }
+    .word-highlight {
+      position: absolute;
+      background: rgba(255, 230, 0, 0.45);
+      border-radius: 2px;
+      transition: opacity 100ms;
+    }
+    .word-highlight.active {
+      background: rgba(255, 160, 0, 0.6);
+    }
+
+    /* Pagina nummering */
+    .page-label {
+      color: rgba(255,255,255,0.7);
+      font-size: 0.8125rem;
+      text-align: center;
+    }
+
+    /* Zoom controls */
+    .zoom-bar {
+      position: absolute;
+      bottom: 20px;
+      right: 20px;
+      display: flex;
+      flex-direction: column;
+      gap: 6px;
+      z-index: 50;
+    }
+    .zoom-btn {
+      width: 36px; height: 36px;
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: var(--radius-sm);
+      cursor: pointer;
+      display: flex; align-items: center; justify-content: center;
+      font-size: 1rem;
+      box-shadow: var(--shadow-sm);
+      transition: all var(--transition);
+    }
+    .zoom-btn:hover { background: var(--surface-2); }
+
+    /* Loader */
+    .pdf-loader {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      gap: 16px;
+      color: rgba(255,255,255,0.7);
+      padding: 60px;
+    }
+    .pdf-loader .spinner { border-color: rgba(255,255,255,0.3); border-top-color: white; width: 36px; height: 36px; }
+
+    /* Welcome banner voor studenten */
+    .welcome-banner {
+      background: var(--accent);
+      color: white;
+      padding: 16px 24px;
+      display: flex;
+      align-items: center;
+      gap: 12px;
+    }
+    .welcome-banner .welcome-text { font-size: 0.9375rem; }
+
+    /* Toets instructies */
+    .instructions-banner {
+      background: var(--warning-bg);
+      border-bottom: 1px solid var(--warning);
+      color: var(--warning);
+      padding: 8px 16px;
+      font-size: 0.8125rem;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+  </style>
+</head>
+<body>
+
+  <!-- === SESSIE PICKER === -->
+  <div class="session-picker" id="sessionPicker">
+    <div class="session-picker-header">
+      <div class="session-picker-logo">
+        📖 TekstMaat
+      </div>
+      <div style="display:flex; align-items:center; gap:12px;">
+        <div id="studentGreeting" class="text-sm text-muted"></div>
+        <div style="display:flex; align-items:center; gap:6px; font-size:0.875rem; color:var(--text-muted);">
+          <label class="toggle" aria-label="Donker thema">
+            <input type="checkbox" id="themeToggle1" onchange="toggleTheme(this.checked)">
+            <span class="toggle-slider"></span>
+          </label>
+          🌙
+        </div>
+        <button class="btn btn-ghost btn-sm" onclick="logout()">Uitloggen</button>
+      </div>
+    </div>
+
+    <div style="padding: 28px;">
+      <h2 style="margin-bottom:6px;">Mijn toetsmomenten</h2>
+      <p class="text-muted" style="margin-bottom:24px;">Kies een document om te beginnen met voorlezen.</p>
+
+      <div class="session-grid" id="sessionGrid">
+        <div class="text-muted">Sessies laden...</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- === READER === -->
+  <div class="reader" id="reader">
+
+    <!-- Reader topbar -->
+    <div class="reader-topbar">
+      <button class="reader-topbar-btn" onclick="backToSessions()">
+        ← Terug
+      </button>
+      <div class="reader-topbar-title" id="readerTitle">Document laden...</div>
+      <div style="display:flex; align-items:center; gap:8px;">
+        <button class="reader-topbar-btn" onclick="toggleTheme()" id="themeBtn">🌙 Donker</button>
+        <button class="reader-topbar-btn" onclick="logout()">Uitloggen</button>
+      </div>
+    </div>
+
+    <!-- Instructies banner (indien aanwezig) -->
+    <div class="instructions-banner" id="instructionsBanner" style="display:none;">
+      <span>⚠️</span>
+      <span id="instructionsText"></span>
+    </div>
+
+    <!-- TTS controlbar -->
+    <div class="tts-bar">
+      <!-- Afspelen / pauzeren -->
+      <button class="play-btn" id="playBtn" onclick="togglePlay()" title="Afspelen/pauzeren (spatiebalk)">
+        ▶
+      </button>
+
+      <div class="tts-controls">
+        <button class="tts-control-btn" onclick="rewindSentence()" title="Vorige zin">⏮ Vorige zin</button>
+        <button class="tts-control-btn" onclick="skipSentence()" title="Volgende zin">Volgende zin ⏭</button>
+      </div>
+
+      <!-- Voortgang -->
+      <div class="tts-progress">
+        <span class="tts-time" id="ttsCurrentTime">0:00</span>
+        <div class="tts-progress-bar" id="ttsProgressBar" onclick="seekToPosition(event)">
+          <div class="tts-progress-fill" id="ttsProgressFill" style="width:0%"></div>
+        </div>
+        <span class="tts-time" id="ttsTotalTime">0:00</span>
+      </div>
+
+      <!-- Snelheid -->
+      <div style="display:flex; align-items:center; gap:6px;" id="speedControl">
+        <span class="text-sm text-muted">Snelheid:</span>
+        <button class="tts-control-btn" onclick="changeSpeed(-0.25)">−</button>
+        <span class="speed-display" id="speedDisplay">1×</span>
+        <button class="tts-control-btn" onclick="changeSpeed(0.25)">+</button>
+      </div>
+
+      <!-- Taal -->
+      <select class="tts-lang-select" id="langSelect" onchange="changeLang(this.value)">
+        <option value="nl">🇳🇱 Nederlands</option>
+        <option value="en">🇬🇧 English</option>
+        <option value="de">🇩🇪 Deutsch</option>
+        <option value="fr">🇫🇷 Français</option>
+        <option value="es">🇪🇸 Español</option>
+      </select>
+
+      <!-- Stem -->
+      <select class="tts-voice-select" id="voiceSelect" onchange="changeVoice(this.value)">
+        <option value="">Standaard stem</option>
+      </select>
+
+      <!-- Pagina navigatie -->
+      <div style="display:flex; align-items:center; gap:6px; margin-left:auto;">
+        <button class="tts-control-btn" onclick="prevPage()">◀</button>
+        <span class="text-sm">
+          <input type="number" id="pageInput" style="width:44px; text-align:center; padding:4px 6px; border:1px solid var(--border); border-radius:var(--radius-sm); background:var(--surface); color:var(--text-primary); font-family:var(--font);" min="1" onchange="goToPage(parseInt(this.value))">
+          / <span id="totalPages">?</span>
+        </span>
+        <button class="tts-control-btn" onclick="nextPage()">▶</button>
+      </div>
+    </div>
+
+    <!-- Reader body -->
+    <div class="reader-body">
+
+      <!-- Pagina thumbnails -->
+      <div class="page-sidebar" id="pageSidebar"></div>
+
+      <!-- PDF viewport -->
+      <div class="pdf-viewport" id="pdfViewport">
+        <div class="pdf-loader" id="pdfLoader">
+          <div class="spinner"></div>
+          <span>Document laden...</span>
+        </div>
+      </div>
+
+      <!-- Zoom controls -->
+      <div class="zoom-bar" style="position:fixed; bottom:20px; right:20px; z-index:100;">
+        <button class="zoom-btn" onclick="zoomIn()" title="Inzoomen">+</button>
+        <button class="zoom-btn" style="font-size:0.6875rem; width:36px;" onclick="resetZoom()" title="Standaard grootte">1:1</button>
+        <button class="zoom-btn" onclick="zoomOut()" title="Uitzoomen">−</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Toast container -->
+  <div class="toast-container" id="toastContainer"></div>
+
+<script>
+// ============================================================
+//  TEKSTMAAT – STUDENT LEESOMGEVING
+// ============================================================
+
+const API = window.location.origin;
+let token = null;
+let user = null;
+let currentSession = null;
+let pdfDoc = null;
+let pdfPages = [];
+let currentPage = 1;
+let totalPageCount = 0;
+let zoomLevel = 1.4;
+let pageTexts = []; // [{page, text, words:[{word,x,y,w,h}]}]
+
+// TTS staat
+let synth = window.speechSynthesis;
+let utterance = null;
+let isPlaying = false;
+let currentSpeed = 1.0;
+let currentLang = 'nl';
+let availableVoices = [];
+let selectedVoice = null;
+let sentences = [];      // Array van zinnen met pagina info
+let currentSentenceIdx = 0;
+let totalCharCount = 0;
+let processedChars = 0;
+
+// PDF.js worker
+pdfjsLib.GlobalWorkerOptions.workerSrc =
+  'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';
+
+// ============================================================
+//  INIT
+// ============================================================
+async function init() {
+  token = localStorage.getItem('lb_token');
+  user = JSON.parse(localStorage.getItem('lb_user') || 'null');
+
+  if (!token || !user) {
+    window.location.href = '/login.html';
+    return;
+  }
+  if (user.role !== 'student') {
+    window.location.href = user.role === 'schooladmin' ? '/admin/' : '/superadmin/';
+    return;
+  }
+
+  // Thema
+  const theme = localStorage.getItem('lb_theme') || 'light';
+  document.documentElement.setAttribute('data-theme', theme);
+  document.getElementById('themeToggle1').checked = theme === 'dark';
+
+  document.getElementById('studentGreeting').textContent =
+    `Welkom, ${user.first_name}`;
+
+  // Spatiebalk: play/pause
+  document.addEventListener('keydown', e => {
+    if (e.code === 'Space' && e.target.tagName !== 'INPUT') {
+      e.preventDefault();
+      togglePlay();
+    }
+    if (e.code === 'ArrowRight') nextPage();
+    if (e.code === 'ArrowLeft') prevPage();
+  });
+
+  // Stemmen laden
+  loadVoices();
+  synth.addEventListener('voiceschanged', loadVoices);
+
+  await loadSessions();
+}
+
+// ============================================================
+//  SESSIES LADEN
+// ============================================================
+async function loadSessions() {
+  const data = await api('/sessions');
+  if (!data?.success) {
+    document.getElementById('sessionGrid').innerHTML =
+      '<div class="text-muted">Geen toetsmomenten beschikbaar.</div>';
+    return;
+  }
+
+  const sessions = data.data;
+  if (!sessions.length) {
+    document.getElementById('sessionGrid').innerHTML = `
+      <div style="grid-column:1/-1; text-align:center; padding:60px 20px; color:var(--text-muted);">
+        <div style="font-size:3rem; margin-bottom:16px;">📭</div>
+        <div class="font-medium">Geen actieve toetsmomenten</div>
+        <div class="text-sm mt-2">Neem contact op met je docent als je een toets verwacht.</div>
+      </div>`;
+    return;
+  }
+
+  document.getElementById('sessionGrid').innerHTML = sessions.map(s => `
+    <div class="session-card" onclick="openSession('${s.id}')">
+      <div class="session-card-icon">${s.file_type === 'pdf' ? '📕' : '📘'}</div>
+      <div class="session-card-title">${esc(s.title)}</div>
+      <div class="session-card-meta">${esc(s.document_title || '')}</div>
+      ${s.ocr_status !== 'done' ? '<div style="margin-top:8px;"><span class="badge badge-amber">⏳ Tekst wordt verwerkt...</span></div>' : ''}
+      <div class="session-card-until">
+        Beschikbaar tot ${formatDate(s.available_until)}
+      </div>
+    </div>
+  `).join('');
+}
+
+// ============================================================
+//  SESSIE OPENEN
+// ============================================================
+async function openSession(sessionId) {
+  // Haal sessie op
+  const data = await api(`/sessions/${sessionId}`);
+  if (!data?.success) { toast('Sessie niet beschikbaar', 'error'); return; }
+
+  currentSession = data.data;
+
+  // Toon reader
+  document.getElementById('sessionPicker').style.display = 'none';
+  document.getElementById('reader').classList.add('active');
+  document.getElementById('readerTitle').textContent = currentSession.title;
+
+  // Instructies
+  if (currentSession.instructions) {
+    document.getElementById('instructionsBanner').style.display = 'flex';
+    document.getElementById('instructionsText').textContent = currentSession.instructions;
+  }
+
+  // Standaard taal instellen
+  if (currentSession.document_language) {
+    currentLang = currentSession.document_language;
+    document.getElementById('langSelect').value = currentLang;
+  }
+
+  // Snelheid/stem opties tonen/verbergen
+  document.getElementById('speedControl').style.display =
+    currentSession.allow_speed_control ? 'flex' : 'none';
+  document.getElementById('voiceSelect').parentElement &&
+    (document.getElementById('voiceSelect').style.display =
+    currentSession.allow_voice_selection ? 'block' : 'none');
+
+  // Laad het document bestand
+  await loadPDF(sessionId);
+
+  // Laad geëxtraheerde tekst voor TTS
+  if (currentSession.ocr_status === 'done') {
+    await loadExtractedText(sessionId);
+  }
+
+  // Log actie
+  api(`/sessions/${sessionId}/log`, {
+    method: 'POST',
+    body: JSON.stringify({ action: 'opened' })
+  });
+}
+
+// ============================================================
+//  PDF LADEN EN RENDEREN
+// ============================================================
+async function loadPDF(sessionId) {
+  const docData = await api(`/documents/${currentSession.document_id}`);
+  if (!docData?.success) { toast('Document niet laden', 'error'); return; }
+
+  const fileUrl = `${API}${docData.data.file_url}`;
+
+  try {
+    const loadingTask = pdfjsLib.getDocument({
+      url: fileUrl,
+      httpHeaders: { 'Authorization': `Bearer ${token}` },
+    });
+
+    pdfDoc = await loadingTask.promise;
+    totalPageCount = pdfDoc.numPages;
+    document.getElementById('totalPages').textContent = totalPageCount;
+
+    document.getElementById('pdfLoader').style.display = 'none';
+    document.getElementById('pageSidebar').innerHTML = '';
+    document.getElementById('pdfViewport').innerHTML = '';
+
+    // Render alle pagina's (voor continuïteit)
+    for (let i = 1; i <= totalPageCount; i++) {
+      await renderPage(i);
+    }
+
+    // Maak thumbnails
+    for (let i = 1; i <= totalPageCount; i++) {
+      await renderThumbnail(i);
+    }
+
+    scrollToPage(1);
+
+  } catch (err) {
+    console.error('PDF laad fout:', err);
+    toast('Fout bij laden van document', 'error');
+    document.getElementById('pdfLoader').innerHTML =
+      '<div class="text-muted">❌ Document kon niet worden geladen</div>';
+  }
+}
+
+async function renderPage(pageNum) {
+  const page = await pdfDoc.getPage(pageNum);
+  const viewport = page.getViewport({ scale: zoomLevel });
+
+  const wrapper = document.createElement('div');
+  wrapper.className = 'pdf-page-wrapper';
+  wrapper.id = `page-wrapper-${pageNum}`;
+  wrapper.style.width = viewport.width + 'px';
+
+  const canvas = document.createElement('canvas');
+  canvas.className = 'pdf-page-canvas';
+  canvas.width = viewport.width;
+  canvas.height = viewport.height;
+
+  const overlay = document.createElement('div');
+  overlay.className = 'highlight-overlay';
+  overlay.id = `highlight-overlay-${pageNum}`;
+  overlay.style.width = viewport.width + 'px';
+  overlay.style.height = viewport.height + 'px';
+
+  wrapper.appendChild(canvas);
+  wrapper.appendChild(overlay);
+
+  const label = document.createElement('div');
+  label.className = 'page-label';
+  label.textContent = `Pagina ${pageNum}`;
+
+  document.getElementById('pdfViewport').appendChild(wrapper);
+  document.getElementById('pdfViewport').appendChild(label);
+
+  const ctx = canvas.getContext('2d');
+  await page.render({ canvasContext: ctx, viewport }).promise;
+
+  pdfPages[pageNum] = { page, viewport, canvas, overlay };
+}
+
+async function renderThumbnail(pageNum) {
+  const page = await pdfDoc.getPage(pageNum);
+  const viewport = page.getViewport({ scale: 0.2 });
+
+  const thumb = document.createElement('div');
+  thumb.className = 'page-thumb';
+  thumb.id = `thumb-${pageNum}`;
+  thumb.onclick = () => scrollToPage(pageNum);
+
+  const canvas = document.createElement('canvas');
+  canvas.width = viewport.width;
+  canvas.height = viewport.height;
+
+  const num = document.createElement('div');
+  num.className = 'page-thumb-num';
+  num.textContent = pageNum;
+
+  thumb.appendChild(canvas);
+  thumb.appendChild(num);
+  document.getElementById('pageSidebar').appendChild(thumb);
+
+  await page.render({ canvasContext: canvas.getContext('2d'), viewport }).promise;
+}
+
+function scrollToPage(pageNum) {
+  currentPage = pageNum;
+  document.getElementById('pageInput').value = pageNum;
+
+  document.querySelectorAll('.page-thumb').forEach(t => t.classList.remove('active'));
+  document.getElementById(`thumb-${pageNum}`)?.classList.add('active');
+
+  const wrapper = document.getElementById(`page-wrapper-${pageNum}`);
+  if (wrapper) wrapper.scrollIntoView({ behavior: 'smooth', block: 'start' });
+}
+
+function prevPage() { if (currentPage > 1) scrollToPage(currentPage - 1); }
+function nextPage() { if (currentPage < totalPageCount) scrollToPage(currentPage + 1); }
+function goToPage(n) {
+  if (n >= 1 && n <= totalPageCount) scrollToPage(n);
+}
+
+function zoomIn() { zoomLevel = Math.min(zoomLevel + 0.2, 3.0); rerender(); }
+function zoomOut() { zoomLevel = Math.max(zoomLevel - 0.2, 0.5); rerender(); }
+function resetZoom() { zoomLevel = 1.4; rerender(); }
+
+async function rerender() {
+  const vp = document.getElementById('pdfViewport');
+  vp.innerHTML = '';
+  document.getElementById('pageSidebar').innerHTML = '';
+  pdfPages = [];
+  for (let i = 1; i <= totalPageCount; i++) {
+    await renderPage(i);
+    await renderThumbnail(i);
+  }
+  scrollToPage(currentPage);
+  // Herplaats highlights
+  highlightCurrentWord();
+}
+
+// ============================================================
+//  TEKST LADEN VOOR TTS
+// ============================================================
+async function loadExtractedText(sessionId) {
+  const data = await api(`/sessions/${sessionId}/text`);
+  if (!data?.success || !data.data?.length) return;
+
+  pageTexts = data.data;
+
+  // Zet tekst om naar zinnen voor TTS
+  sentences = [];
+  totalCharCount = 0;
+
+  for (const pageData of pageTexts) {
+    const pageNum = pageData.page;
+    const text = pageData.text || '';
+
+    // Splits in zinnen (op punt, vraagteken, uitroepteken)
+    const sents = text.match(/[^.!?]+[.!?]+/g) || [text];
+    for (const sent of sents) {
+      const trimmed = sent.trim();
+      if (trimmed.length > 2) {
+        sentences.push({ text: trimmed, page: pageNum, charStart: totalCharCount });
+        totalCharCount += trimmed.length + 1;
+      }
+    }
+  }
+
+  updateTTSProgressTime();
+}
+
+// ============================================================
+//  TTS FUNCTIES
+// ============================================================
+function togglePlay() {
+  if (isPlaying) {
+    pauseTTS();
+  } else {
+    startTTS();
+  }
+}
+
+function startTTS() {
+  if (!sentences.length) {
+    toast('Tekst wordt nog verwerkt...', 'info');
+    return;
+  }
+
+  isPlaying = true;
+  document.getElementById('playBtn').textContent = '⏸';
+  speakCurrentSentence();
+
+  api(`/sessions/${currentSession.id}/log`, {
+    method: 'POST',
+    body: JSON.stringify({ action: 'started_tts', metadata: { sentence: currentSentenceIdx } })
+  });
+}
+
+function pauseTTS() {
+  isPlaying = false;
+  synth.cancel();
+  document.getElementById('playBtn').textContent = '▶';
+  clearHighlights();
+}
+
+function speakCurrentSentence() {
+  if (!isPlaying || currentSentenceIdx >= sentences.length) {
+    if (currentSentenceIdx >= sentences.length) {
+      // Klaar!
+      isPlaying = false;
+      document.getElementById('playBtn').textContent = '▶';
+      currentSentenceIdx = 0;
+      toast('Einde van document bereikt', 'info');
+    }
+    return;
+  }
+
+  synth.cancel();
+  const sent = sentences[currentSentenceIdx];
+
+  utterance = new SpeechSynthesisUtterance(sent.text);
+  utterance.rate = currentSpeed;
+  utterance.lang = getLangCode(currentLang);
+
+  if (selectedVoice) {
+    utterance.voice = selectedVoice;
+  }
+
+  // Scroll naar de juiste pagina
+  if (sent.page !== currentPage) {
+    scrollToPage(sent.page);
+  }
+
+  // Word-level highlighting via boundary events
+  utterance.addEventListener('boundary', (event) => {
+    if (event.name === 'word') {
+      highlightWord(sent, event.charIndex, event.charLength);
+      updateTTSProgress(sent.charStart + event.charIndex);
+    }
+  });
+
+  utterance.addEventListener('end', () => {
+    if (isPlaying) {
+      currentSentenceIdx++;
+      processedChars = sent.charStart + sent.text.length;
+      speakCurrentSentence();
+    }
+  });
+
+  utterance.addEventListener('error', (e) => {
+    if (e.error !== 'interrupted') {
+      console.error('TTS fout:', e.error);
+    }
+  });
+
+  synth.speak(utterance);
+}
+
+function skipSentence() {
+  synth.cancel();
+  currentSentenceIdx = Math.min(currentSentenceIdx + 1, sentences.length - 1);
+  if (isPlaying) speakCurrentSentence();
+}
+
+function rewindSentence() {
+  synth.cancel();
+  currentSentenceIdx = Math.max(currentSentenceIdx - 1, 0);
+  if (isPlaying) speakCurrentSentence();
+}
+
+function changeSpeed(delta) {
+  currentSpeed = Math.max(0.5, Math.min(2.0, currentSpeed + delta));
+  const display = currentSpeed === 1.0 ? '1×' : currentSpeed.toFixed(2).replace('.00', '') + '×';
+  document.getElementById('speedDisplay').textContent = display;
+
+  if (utterance) utterance.rate = currentSpeed;
+
+  // Herstart met nieuwe snelheid
+  if (isPlaying) {
+    synth.cancel();
+    setTimeout(speakCurrentSentence, 50);
+  }
+
+  api(`/sessions/${currentSession?.id}/log`, {
+    method: 'POST',
+    body: JSON.stringify({ action: 'changed_speed', metadata: { speed: currentSpeed } })
+  });
+}
+
+function changeLang(lang) {
+  currentLang = lang;
+  loadVoicesForLang(lang);
+  if (isPlaying) {
+    synth.cancel();
+    setTimeout(speakCurrentSentence, 50);
+  }
+}
+
+function changeVoice(voiceName) {
+  selectedVoice = availableVoices.find(v => v.name === voiceName) || null;
+  if (isPlaying) {
+    synth.cancel();
+    setTimeout(speakCurrentSentence, 50);
+  }
+}
+
+// ============================================================
+//  HIGHLIGHTING
+// ============================================================
+function highlightWord(sentence, charIndex, charLength) {
+  clearHighlights();
+
+  // Probeer het woord te vinden in de geëxtraheerde tekst
+  const pageData = pageTexts.find(p => p.page === sentence.page);
+  if (!pageData?.words?.length) {
+    // Fallback: markeer heel scherm vaag
+    return;
+  }
+
+  const word = sentence.text.substring(charIndex, charIndex + charLength).toLowerCase().trim();
+  if (!word) return;
+
+  // Zoek het woord in de pagina tekst
+  const match = pageData.words.find(w => w.word?.toLowerCase() === word);
+  if (!match) return;
+
+  const pageInfo = pdfPages[sentence.page];
+  if (!pageInfo) return;
+
+  const overlay = document.getElementById(`highlight-overlay-${sentence.page}`);
+  if (!overlay) return;
+
+  const scale = pageInfo.viewport.scale;
+  const highlight = document.createElement('div');
+  highlight.className = 'word-highlight active';
+  highlight.style.left = (match.x * scale) + 'px';
+  highlight.style.top = (match.y * scale) + 'px';
+  highlight.style.width = (match.w * scale) + 'px';
+  highlight.style.height = (match.h * scale) + 'px';
+
+  overlay.appendChild(highlight);
+}
+
+function clearHighlights() {
+  document.querySelectorAll('.highlight-overlay').forEach(o => o.innerHTML = '');
+}
+
+function highlightCurrentWord() {
+  // Na rerender: herplaats huidige highlight
+}
+
+// ============================================================
+//  VOORTGANG
+// ============================================================
+function updateTTSProgress(currentChar) {
+  const pct = totalCharCount > 0 ? (currentChar / totalCharCount) * 100 : 0;
+  document.getElementById('ttsProgressFill').style.width = pct + '%';
+
+  const elapsedSec = estimateTime(currentChar);
+  const totalSec = estimateTime(totalCharCount);
+  document.getElementById('ttsCurrentTime').textContent = formatTime(elapsedSec);
+  document.getElementById('ttsTotalTime').textContent = formatTime(totalSec);
+}
+
+function updateTTSProgressTime() {
+  const totalSec = estimateTime(totalCharCount);
+  document.getElementById('ttsTotalTime').textContent = formatTime(totalSec);
+}
+
+function estimateTime(chars) {
+  // ~15 tekens per seconde bij speed 1.0
+  return chars / (15 * currentSpeed);
+}
+
+function formatTime(sec) {
+  const m = Math.floor(sec / 60);
+  const s = Math.floor(sec % 60);
+  return `${m}:${s.toString().padStart(2, '0')}`;
+}
+
+function seekToPosition(event) {
+  const bar = document.getElementById('ttsProgressBar');
+  const pct = event.offsetX / bar.offsetWidth;
+  const targetChar = Math.floor(pct * totalCharCount);
+
+  // Vind de dichtsbijzijnde zin
+  let targetIdx = 0;
+  for (let i = 0; i < sentences.length; i++) {
+    if (sentences[i].charStart <= targetChar) targetIdx = i;
+    else break;
+  }
+
+  currentSentenceIdx = targetIdx;
+  processedChars = sentences[targetIdx]?.charStart || 0;
+
+  if (isPlaying) {
+    synth.cancel();
+    setTimeout(speakCurrentSentence, 50);
+  }
+
+  updateTTSProgress(targetChar);
+}
+
+// ============================================================
+//  STEMMEN
+// ============================================================
+function loadVoices() {
+  availableVoices = synth.getVoices();
+  loadVoicesForLang(currentLang);
+}
+
+function loadVoicesForLang(lang) {
+  const code = getLangCode(lang);
+  const filtered = availableVoices.filter(v => v.lang.startsWith(code.split('-')[0]));
+  const select = document.getElementById('voiceSelect');
+
+  select.innerHTML = '<option value="">Standaard stem</option>' +
+    filtered.map(v => `<option value="${v.name}">${v.name}</option>`).join('');
+
+  selectedVoice = null;
+}
+
+function getLangCode(lang) {
+  const map = { nl: 'nl-NL', en: 'en-US', de: 'de-DE', fr: 'fr-FR', es: 'es-ES' };
+  return map[lang] || 'nl-NL';
+}
+
+// ============================================================
+//  NAVIGATIE
+// ============================================================
+function backToSessions() {
+  pauseTTS();
+  document.getElementById('reader').classList.remove('active');
+  document.getElementById('sessionPicker').style.display = 'flex';
+  pdfDoc = null;
+  pdfPages = [];
+  sentences = [];
+  currentSentenceIdx = 0;
+  currentSession = null;
+  document.getElementById('pdfViewport').innerHTML = '';
+  document.getElementById('pageSidebar').innerHTML = '';
+}
+
+// ============================================================
+//  HELPERS
+// ============================================================
+async function api(path, options = {}) {
+  const res = await fetch(`${API}/api${path}`, {
+    ...options,
+    headers: {
+      'Authorization': `Bearer ${token}`,
+      'Content-Type': 'application/json',
+      ...(options.headers || {}),
+    },
+  });
+  if (res.status === 401) { logout(); return null; }
+  try { return res.json(); } catch { return null; }
+}
+
+function toggleTheme(forceState) {
+  const current = document.documentElement.getAttribute('data-theme');
+  const isDark = typeof forceState === 'boolean' ? forceState : current !== 'dark';
+  const theme = isDark ? 'dark' : 'light';
+  document.documentElement.setAttribute('data-theme', theme);
+  localStorage.setItem('lb_theme', theme);
+  document.getElementById('themeToggle1').checked = isDark;
+}
+
+function logout() {
+  pauseTTS();
+  localStorage.removeItem('lb_token');
+  localStorage.removeItem('lb_user');
+  window.location.href = '/login.html';
+}
+
+function esc(str) {
+  return String(str || '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+}
+
+function formatDate(iso) {
+  if (!iso) return '–';
+  return new Date(iso).toLocaleDateString('nl-NL', { day: 'numeric', month: 'long', year: 'numeric', hour: '2-digit', minute: '2-digit' });
+}
+
+function toast(msg, type = 'info') {
+  const container = document.getElementById('toastContainer');
+  const el = document.createElement('div');
+  el.className = `toast toast-${type}`;
+  const icons = { success: '✅', error: '❌', info: 'ℹ️' };
+  el.innerHTML = `<span>${icons[type] || ''}</span> ${esc(msg)}`;
+  container.appendChild(el);
+  setTimeout(() => el.remove(), 4000);
+}
+
+// Start
+init();
+</script>
+</body>
+</html>

@@ -1,0 +1,1327 @@
+<!DOCTYPE html>
+<html lang="nl" data-theme="light">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>TekstMaat – Superadmin</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@300;400;500;600;700&family=DM+Mono:wght@400;500&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="../shared/styles.css" />
+  <style>
+    /* ── Superadmin-specific layout ─────────────────────────────── */
+    .sa-layout { display: flex; min-height: 100vh; }
+
+    .sa-sidebar {
+      width: 260px;
+      background: var(--sidebar-bg);
+      border-right: 1px solid var(--border);
+      display: flex;
+      flex-direction: column;
+      position: fixed;
+      top: 0; left: 0; bottom: 0;
+      z-index: 100;
+      transition: transform 0.3s ease;
+    }
+
+    .sa-sidebar-header {
+      padding: 24px 20px 20px;
+      border-bottom: 1px solid var(--border);
+    }
+
+    .sa-logo {
+      display: flex; align-items: center; gap: 10px;
+      text-decoration: none;
+    }
+    .sa-logo-icon {
+      width: 36px; height: 36px;
+      background: var(--accent);
+      border-radius: 8px;
+      display: flex; align-items: center; justify-content: center;
+      color: white; font-size: 18px;
+    }
+    .sa-logo-text { font-size: 18px; font-weight: 700; color: var(--text-primary); }
+    .sa-logo-badge {
+      font-size: 10px; font-weight: 600;
+      background: var(--accent-muted);
+      color: var(--accent);
+      border-radius: 4px; padding: 2px 6px;
+      margin-top: 2px;
+    }
+
+    .sa-nav { flex: 1; overflow-y: auto; padding: 12px 12px; }
+    .sa-nav-section { margin-bottom: 20px; }
+    .sa-nav-label {
+      font-size: 10px; font-weight: 600; letter-spacing: 0.08em;
+      text-transform: uppercase; color: var(--text-muted);
+      padding: 0 8px; margin-bottom: 4px;
+    }
+    .sa-nav-item {
+      display: flex; align-items: center; gap: 10px;
+      padding: 9px 10px; border-radius: 8px;
+      color: var(--text-secondary); font-size: 14px; font-weight: 500;
+      cursor: pointer; transition: all 0.15s;
+      border: none; background: none; width: 100%; text-align: left;
+    }
+    .sa-nav-item:hover { background: var(--hover); color: var(--text-primary); }
+    .sa-nav-item.active { background: var(--accent-muted); color: var(--accent); }
+    .sa-nav-item .nav-icon { font-size: 16px; width: 20px; text-align: center; }
+    .sa-nav-item .nav-badge {
+      margin-left: auto; font-size: 11px; font-weight: 600;
+      background: var(--accent); color: white;
+      border-radius: 10px; padding: 1px 7px; min-width: 18px; text-align: center;
+    }
+
+    .sa-sidebar-footer {
+      padding: 16px; border-top: 1px solid var(--border);
+      display: flex; flex-direction: column; gap: 8px;
+    }
+    .sa-user-info { display: flex; align-items: center; gap: 10px; }
+    .sa-avatar {
+      width: 32px; height: 32px; border-radius: 50%;
+      background: var(--accent); color: white;
+      display: flex; align-items: center; justify-content: center;
+      font-size: 13px; font-weight: 600; flex-shrink: 0;
+    }
+    .sa-user-name { font-size: 13px; font-weight: 600; color: var(--text-primary); }
+    .sa-user-role { font-size: 11px; color: var(--text-muted); }
+
+    .sa-main {
+      margin-left: 260px;
+      flex: 1;
+      display: flex;
+      flex-direction: column;
+      min-height: 100vh;
+    }
+
+    .sa-topbar {
+      height: 64px;
+      border-bottom: 1px solid var(--border);
+      display: flex; align-items: center;
+      padding: 0 32px;
+      background: var(--bg-primary);
+      position: sticky; top: 0; z-index: 50;
+    }
+    .sa-topbar-title { font-size: 20px; font-weight: 700; color: var(--text-primary); }
+    .sa-topbar-actions { margin-left: auto; display: flex; align-items: center; gap: 12px; }
+
+    .sa-content { padding: 32px; flex: 1; }
+
+    /* ── Stats grid ─────────────────────────────────────────────── */
+    .stats-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+      gap: 16px;
+      margin-bottom: 32px;
+    }
+    .stat-card {
+      background: var(--bg-card);
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      padding: 20px 22px;
+      position: relative;
+      overflow: hidden;
+    }
+    .stat-card::before {
+      content: '';
+      position: absolute;
+      top: 0; left: 0; right: 0;
+      height: 3px;
+      background: var(--accent);
+    }
+    .stat-label { font-size: 12px; font-weight: 600; color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.06em; }
+    .stat-value { font-size: 32px; font-weight: 700; color: var(--text-primary); margin: 6px 0 2px; line-height: 1; }
+    .stat-sub { font-size: 12px; color: var(--text-muted); }
+    .stat-icon { position: absolute; top: 18px; right: 18px; font-size: 22px; opacity: 0.15; }
+
+    /* ── Schools table ──────────────────────────────────────────── */
+    .section-header {
+      display: flex; align-items: center; justify-content: space-between;
+      margin-bottom: 16px;
+    }
+    .section-title { font-size: 16px; font-weight: 700; color: var(--text-primary); }
+
+    .school-card {
+      background: var(--bg-card);
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      margin-bottom: 12px;
+      overflow: hidden;
+      transition: box-shadow 0.15s;
+    }
+    .school-card:hover { box-shadow: 0 4px 16px var(--shadow); }
+
+    .school-card-header {
+      padding: 16px 20px;
+      display: flex; align-items: center; gap: 14px;
+      cursor: pointer;
+    }
+    .school-icon {
+      width: 40px; height: 40px; border-radius: 10px;
+      background: var(--accent-muted);
+      display: flex; align-items: center; justify-content: center;
+      font-size: 18px; flex-shrink: 0;
+    }
+    .school-name { font-size: 15px; font-weight: 600; color: var(--text-primary); }
+    .school-meta { font-size: 12px; color: var(--text-muted); margin-top: 2px; }
+    .school-stats { margin-left: auto; display: flex; gap: 20px; text-align: right; }
+    .school-stat-num { font-size: 18px; font-weight: 700; color: var(--text-primary); }
+    .school-stat-label { font-size: 11px; color: var(--text-muted); }
+    .school-actions { display: flex; gap: 8px; margin-left: 16px; }
+
+    .school-detail {
+      border-top: 1px solid var(--border);
+      padding: 16px 20px;
+      display: none;
+      background: var(--bg-secondary);
+    }
+    .school-detail.open { display: block; }
+    .school-detail-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+
+    /* ── License badge ──────────────────────────────────────────── */
+    .license-badge {
+      display: inline-flex; align-items: center; gap: 5px;
+      font-size: 12px; font-weight: 600;
+      border-radius: 20px; padding: 3px 10px;
+    }
+    .license-active { background: #d1fae5; color: #065f46; }
+    .license-trial  { background: #fef3c7; color: #92400e; }
+    .license-expired{ background: #fee2e2; color: #991b1b; }
+    [data-theme="dark"] .license-active  { background: #064e3b; color: #6ee7b7; }
+    [data-theme="dark"] .license-trial   { background: #451a03; color: #fcd34d; }
+    [data-theme="dark"] .license-expired { background: #450a0a; color: #fca5a5; }
+
+    /* ── Activity log ───────────────────────────────────────────── */
+    .activity-list { display: flex; flex-direction: column; gap: 0; }
+    .activity-item {
+      display: flex; align-items: flex-start; gap: 12px;
+      padding: 12px 0;
+      border-bottom: 1px solid var(--border);
+    }
+    .activity-item:last-child { border-bottom: none; }
+    .activity-dot {
+      width: 8px; height: 8px; border-radius: 50%;
+      background: var(--accent); margin-top: 6px; flex-shrink: 0;
+    }
+    .activity-text { font-size: 13px; color: var(--text-secondary); }
+    .activity-text strong { color: var(--text-primary); font-weight: 600; }
+    .activity-time { font-size: 11px; color: var(--text-muted); margin-top: 2px; }
+
+    /* ── Chart placeholder ──────────────────────────────────────── */
+    .chart-bar-wrap { display: flex; align-items: flex-end; gap: 6px; height: 80px; margin-top: 12px; }
+    .chart-bar { flex: 1; background: var(--accent-muted); border-radius: 4px 4px 0 0; min-width: 0; position: relative; transition: background 0.2s; }
+    .chart-bar:hover { background: var(--accent); }
+    .chart-labels { display: flex; gap: 6px; margin-top: 4px; }
+    .chart-label { flex: 1; font-size: 10px; color: var(--text-muted); text-align: center; min-width: 0; }
+
+    /* ── Modal form ─────────────────────────────────────────────── */
+    .form-row { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; }
+    @media (max-width: 600px) { .form-row { grid-template-columns: 1fr; } }
+
+    /* ── Sections ───────────────────────────────────────────────── */
+    .page-section { display: none; }
+    .page-section.active { display: block; }
+
+    /* ── System health ──────────────────────────────────────────── */
+    .health-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); gap: 12px; }
+    .health-card {
+      background: var(--bg-card); border: 1px solid var(--border);
+      border-radius: 10px; padding: 16px;
+      display: flex; align-items: center; gap: 12px;
+    }
+    .health-dot { width: 10px; height: 10px; border-radius: 50%; flex-shrink: 0; }
+    .health-ok { background: #10b981; }
+    .health-warn { background: #f59e0b; }
+    .health-err  { background: #ef4444; }
+    .health-label { font-size: 13px; font-weight: 600; color: var(--text-primary); }
+    .health-sub { font-size: 11px; color: var(--text-muted); }
+  </style>
+</head>
+<body>
+
+<div class="sa-layout">
+
+  <!-- ═══ Sidebar ════════════════════════════════════════════════ -->
+  <aside class="sa-sidebar">
+    <div class="sa-sidebar-header">
+      <a class="sa-logo" href="#">
+        <div class="sa-logo-icon">📖</div>
+        <div>
+          <div class="sa-logo-text">TekstMaat</div>
+          <div class="sa-logo-badge">SUPERADMIN</div>
+        </div>
+      </a>
+    </div>
+
+    <nav class="sa-nav">
+      <div class="sa-nav-section">
+        <div class="sa-nav-label">Overzicht</div>
+        <button class="sa-nav-item active" data-section="dashboard">
+          <span class="nav-icon">📊</span> Dashboard
+        </button>
+        <button class="sa-nav-item" data-section="activity">
+          <span class="nav-icon">🕐</span> Activiteiten
+        </button>
+        <button class="sa-nav-item" data-section="health">
+          <span class="nav-icon">🟢</span> Systeemstatus
+        </button>
+      </div>
+
+      <div class="sa-nav-section">
+        <div class="sa-nav-label">Beheer</div>
+        <button class="sa-nav-item" data-section="schools">
+          <span class="nav-icon">🏫</span> Scholen
+          <span class="nav-badge" id="schoolCountBadge">0</span>
+        </button>
+        <button class="sa-nav-item" data-section="licenses">
+          <span class="nav-icon">📋</span> Licenties
+        </button>
+        <button class="sa-nav-item" data-section="storage">
+          <span class="nav-icon">💾</span> Opslag & gebruik
+        </button>
+      </div>
+
+      <div class="sa-nav-section">
+        <div class="sa-nav-label">Systeem</div>
+        <button class="sa-nav-item" data-section="settings">
+          <span class="nav-icon">⚙️</span> Instellingen
+        </button>
+        <button class="sa-nav-item" data-section="logs">
+          <span class="nav-icon">📄</span> Audit logs
+        </button>
+      </div>
+    </nav>
+
+    <div class="sa-sidebar-footer">
+      <div class="sa-user-info">
+        <div class="sa-avatar" id="saAvatar">SA</div>
+        <div>
+          <div class="sa-user-name" id="saUserName">Superadmin</div>
+          <div class="sa-user-role">Volledige toegang</div>
+        </div>
+      </div>
+      <button class="btn btn-ghost btn-sm" onclick="logout()" style="width:100%;justify-content:center;">
+        🚪 Uitloggen
+      </button>
+    </div>
+  </aside>
+
+  <!-- ═══ Main ════════════════════════════════════════════════════ -->
+  <main class="sa-main">
+    <header class="sa-topbar">
+      <div class="sa-topbar-title" id="pageTitle">Dashboard</div>
+      <div class="sa-topbar-actions">
+        <button class="btn btn-ghost btn-sm" id="themeToggle" title="Thema wisselen">🌙</button>
+        <button class="btn btn-primary btn-sm" onclick="openSchoolModal()">+ School toevoegen</button>
+      </div>
+    </header>
+
+    <div class="sa-content">
+
+      <!-- ─── Dashboard ──────────────────────────────────────── -->
+      <section class="page-section active" id="section-dashboard">
+        <div class="stats-grid">
+          <div class="stat-card">
+            <div class="stat-label">Scholen actief</div>
+            <div class="stat-value" id="statSchools">–</div>
+            <div class="stat-sub">van totaal <span id="statSchoolsTotal">–</span></div>
+            <div class="stat-icon">🏫</div>
+          </div>
+          <div class="stat-card">
+            <div class="stat-label">Studenten totaal</div>
+            <div class="stat-value" id="statStudents">–</div>
+            <div class="stat-sub">actief deze maand</div>
+            <div class="stat-icon">👨‍🎓</div>
+          </div>
+          <div class="stat-card">
+            <div class="stat-label">Documenten totaal</div>
+            <div class="stat-value" id="statDocs">–</div>
+            <div class="stat-sub"><span id="statDocsOcr">–</span> met OCR verwerkt</div>
+            <div class="stat-icon">📄</div>
+          </div>
+          <div class="stat-card">
+            <div class="stat-label">R2 opslag gebruikt</div>
+            <div class="stat-value" id="statStorage">–</div>
+            <div class="stat-sub">GB van totale quota</div>
+            <div class="stat-icon">💾</div>
+          </div>
+          <div class="stat-card">
+            <div class="stat-label">Sessies vandaag</div>
+            <div class="stat-value" id="statSessions">–</div>
+            <div class="stat-sub">actieve leessessies</div>
+            <div class="stat-icon">📖</div>
+          </div>
+          <div class="stat-card">
+            <div class="stat-label">Licenties verlopen</div>
+            <div class="stat-value" id="statExpired" style="color:var(--danger);">–</div>
+            <div class="stat-sub">vereisen aandacht</div>
+            <div class="stat-icon">⚠️</div>
+          </div>
+        </div>
+
+        <!-- Usage chart -->
+        <div style="display:grid;grid-template-columns:2fr 1fr;gap:20px;">
+          <div class="card">
+            <div class="card-header">
+              <div class="card-title">Sessies per dag (afgelopen 2 weken)</div>
+            </div>
+            <div class="card-body">
+              <div class="chart-bar-wrap" id="sessionsChart"></div>
+              <div class="chart-labels" id="sessionsChartLabels"></div>
+            </div>
+          </div>
+
+          <div class="card">
+            <div class="card-header"><div class="card-title">Recente activiteiten</div></div>
+            <div class="card-body" style="padding:0 20px;">
+              <div class="activity-list" id="recentActivity">
+                <div class="activity-item">
+                  <div class="activity-dot"></div>
+                  <div>
+                    <div class="activity-text">Laden…</div>
+                    <div class="activity-time"></div>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- ─── Scholen ────────────────────────────────────────── -->
+      <section class="page-section" id="section-schools">
+        <div class="section-header">
+          <div>
+            <div class="section-title">Scholen beheren</div>
+            <div style="font-size:13px;color:var(--text-muted);margin-top:2px;">
+              Overzicht van alle aangesloten scholen en hun instellingen
+            </div>
+          </div>
+          <div style="display:flex;gap:8px;">
+            <input type="search" class="input" placeholder="Zoek school…" id="schoolSearch" style="width:220px;" />
+            <button class="btn btn-primary" onclick="openSchoolModal()">+ School toevoegen</button>
+          </div>
+        </div>
+
+        <div id="schoolsList">
+          <div class="card" style="padding:40px;text-align:center;color:var(--text-muted);">
+            Laden…
+          </div>
+        </div>
+      </section>
+
+      <!-- ─── Licenties ──────────────────────────────────────── -->
+      <section class="page-section" id="section-licenses">
+        <div class="section-header">
+          <div class="section-title">Licenties & abonnementen</div>
+          <button class="btn btn-primary" onclick="openLicenseModal()">+ Licentie aanmaken</button>
+        </div>
+
+        <div class="card">
+          <table class="table">
+            <thead>
+              <tr>
+                <th>School</th>
+                <th>Plan</th>
+                <th>Max studenten</th>
+                <th>Max opslag</th>
+                <th>Geldig t/m</th>
+                <th>Status</th>
+                <th></th>
+              </tr>
+            </thead>
+            <tbody id="licenseTable">
+              <tr><td colspan="7" style="text-align:center;color:var(--text-muted);">Laden…</td></tr>
+            </tbody>
+          </table>
+        </div>
+      </section>
+
+      <!-- ─── Opslag ─────────────────────────────────────────── -->
+      <section class="page-section" id="section-storage">
+        <div class="section-title" style="margin-bottom:20px;">Opslag & gebruik per school</div>
+        <div class="card">
+          <table class="table">
+            <thead>
+              <tr>
+                <th>School</th>
+                <th>Documenten</th>
+                <th>Opslag gebruikt</th>
+                <th>Quota</th>
+                <th>Gebruik %</th>
+              </tr>
+            </thead>
+            <tbody id="storageTable">
+              <tr><td colspan="5" style="text-align:center;color:var(--text-muted);">Laden…</td></tr>
+            </tbody>
+          </table>
+        </div>
+      </section>
+
+      <!-- ─── Activiteiten ───────────────────────────────────── -->
+      <section class="page-section" id="section-activity">
+        <div class="section-title" style="margin-bottom:20px;">Alle activiteiten</div>
+        <div class="card">
+          <table class="table">
+            <thead>
+              <tr><th>Tijd</th><th>School</th><th>Gebruiker</th><th>Actie</th><th>Details</th></tr>
+            </thead>
+            <tbody id="activityTable">
+              <tr><td colspan="5" style="text-align:center;color:var(--text-muted);">Laden…</td></tr>
+            </tbody>
+          </table>
+        </div>
+      </section>
+
+      <!-- ─── Systeemstatus ──────────────────────────────────── -->
+      <section class="page-section" id="section-health">
+        <div class="section-title" style="margin-bottom:20px;">Systeemstatus</div>
+        <div class="health-grid" id="healthGrid">
+          <div class="health-card">
+            <div class="health-dot health-ok"></div>
+            <div>
+              <div class="health-label">Worker API</div>
+              <div class="health-sub">Operationeel</div>
+            </div>
+          </div>
+          <div class="health-card">
+            <div class="health-dot health-ok"></div>
+            <div>
+              <div class="health-label">R2 Opslag</div>
+              <div class="health-sub">Operationeel</div>
+            </div>
+          </div>
+          <div class="health-card">
+            <div class="health-dot health-ok"></div>
+            <div>
+              <div class="health-label">D1 Database</div>
+              <div class="health-sub">Operationeel</div>
+            </div>
+          </div>
+          <div class="health-card">
+            <div class="health-dot health-ok"></div>
+            <div>
+              <div class="health-label">KV Cache</div>
+              <div class="health-sub">Operationeel</div>
+            </div>
+          </div>
+          <div class="health-card">
+            <div class="health-dot health-warn"></div>
+            <div>
+              <div class="health-label">AI / OCR</div>
+              <div class="health-sub">Wachtrij: <span id="ocrQueue">–</span> items</div>
+            </div>
+          </div>
+          <div class="health-card">
+            <div class="health-dot health-ok"></div>
+            <div>
+              <div class="health-label">Cloudflare Pages</div>
+              <div class="health-sub">Operationeel</div>
+            </div>
+          </div>
+        </div>
+
+        <div class="card" style="margin-top:20px;">
+          <div class="card-header"><div class="card-title">Schijfruimte & quota</div></div>
+          <div class="card-body">
+            <div style="display:flex;flex-direction:column;gap:14px;" id="storageMeters"></div>
+          </div>
+        </div>
+      </section>
+
+      <!-- ─── Instellingen ───────────────────────────────────── -->
+      <section class="page-section" id="section-settings">
+        <div class="section-title" style="margin-bottom:20px;">Systeeminstellingen</div>
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:20px;">
+          <div class="card">
+            <div class="card-header"><div class="card-title">Algemeen</div></div>
+            <div class="card-body" style="display:flex;flex-direction:column;gap:14px;">
+              <div class="form-group">
+                <label class="label">Platformnaam</label>
+                <input type="text" class="input" value="TekstMaat" />
+              </div>
+              <div class="form-group">
+                <label class="label">Standaard taal</label>
+                <select class="input">
+                  <option value="nl">Nederlands</option>
+                  <option value="en">English</option>
+                </select>
+              </div>
+              <div class="form-group">
+                <label class="label">Standaard voorleessnelheid</label>
+                <select class="input">
+                  <option value="0.75">0.75×</option>
+                  <option value="1" selected>1.0× (normaal)</option>
+                  <option value="1.25">1.25×</option>
+                </select>
+              </div>
+              <button class="btn btn-primary">Opslaan</button>
+            </div>
+          </div>
+
+          <div class="card">
+            <div class="card-header"><div class="card-title">OCR & AI</div></div>
+            <div class="card-body" style="display:flex;flex-direction:column;gap:14px;">
+              <div class="form-group">
+                <label class="label">OCR model</label>
+                <select class="input">
+                  <option value="llama-3.2-11b-vision-instruct">Llama 3.2 Vision 11B</option>
+                </select>
+              </div>
+              <div class="form-group">
+                <label class="label">Max wachtrij OCR (per school)</label>
+                <input type="number" class="input" value="20" />
+              </div>
+              <div style="display:flex;align-items:center;justify-content:space-between;">
+                <div>
+                  <div style="font-size:14px;font-weight:500;color:var(--text-primary);">OCR automatisch herstarten</div>
+                  <div style="font-size:12px;color:var(--text-muted);">Bij mislukte documenten</div>
+                </div>
+                <label class="toggle-switch">
+                  <input type="checkbox" checked />
+                  <span class="toggle-slider"></span>
+                </label>
+              </div>
+              <button class="btn btn-primary">Opslaan</button>
+            </div>
+          </div>
+
+          <div class="card">
+            <div class="card-header"><div class="card-title">Beveiliging</div></div>
+            <div class="card-body" style="display:flex;flex-direction:column;gap:14px;">
+              <div class="form-group">
+                <label class="label">JWT geldigheid (uren)</label>
+                <input type="number" class="input" value="8" />
+              </div>
+              <div class="form-group">
+                <label class="label">Max inlogpogingen</label>
+                <input type="number" class="input" value="5" />
+              </div>
+              <div class="form-group">
+                <label class="label">Blokkeerperiode (minuten)</label>
+                <input type="number" class="input" value="15" />
+              </div>
+              <button class="btn btn-primary">Opslaan</button>
+            </div>
+          </div>
+
+          <div class="card">
+            <div class="card-header"><div class="card-title">Superadmin wachtwoord</div></div>
+            <div class="card-body" style="display:flex;flex-direction:column;gap:14px;">
+              <div class="form-group">
+                <label class="label">Huidig wachtwoord</label>
+                <input type="password" class="input" placeholder="••••••••" />
+              </div>
+              <div class="form-group">
+                <label class="label">Nieuw wachtwoord</label>
+                <input type="password" class="input" placeholder="••••••••" />
+              </div>
+              <div class="form-group">
+                <label class="label">Bevestig nieuw wachtwoord</label>
+                <input type="password" class="input" placeholder="••••••••" />
+              </div>
+              <button class="btn btn-primary">Wachtwoord wijzigen</button>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- ─── Audit logs ──────────────────────────────────────── -->
+      <section class="page-section" id="section-logs">
+        <div class="section-header">
+          <div class="section-title">Audit logs</div>
+          <div style="display:flex;gap:8px;">
+            <select class="input" id="logFilterSchool" style="width:180px;">
+              <option value="">Alle scholen</option>
+            </select>
+            <select class="input" id="logFilterAction" style="width:160px;">
+              <option value="">Alle acties</option>
+              <option value="login">Inloggen</option>
+              <option value="upload">Upload</option>
+              <option value="session">Sessie</option>
+            </select>
+            <input type="date" class="input" id="logFilterDate" style="width:160px;" />
+          </div>
+        </div>
+        <div class="card">
+          <table class="table">
+            <thead>
+              <tr><th>Tijdstip</th><th>School</th><th>Gebruiker</th><th>IP</th><th>Actie</th><th>Details</th></tr>
+            </thead>
+            <tbody id="auditTable">
+              <tr><td colspan="6" style="text-align:center;color:var(--text-muted);">Laden…</td></tr>
+            </tbody>
+          </table>
+        </div>
+      </section>
+
+    </div><!-- /sa-content -->
+  </main>
+</div><!-- /sa-layout -->
+
+<!-- ═══ Modals ════════════════════════════════════════════════════ -->
+
+<!-- School modal -->
+<div class="modal-backdrop" id="schoolModal">
+  <div class="modal" style="max-width:560px;">
+    <div class="modal-header">
+      <div class="modal-title" id="schoolModalTitle">School toevoegen</div>
+      <button class="modal-close" onclick="closeModal('schoolModal')">✕</button>
+    </div>
+    <div class="modal-body" style="display:flex;flex-direction:column;gap:14px;">
+      <input type="hidden" id="editSchoolId" />
+      <div class="form-row">
+        <div class="form-group">
+          <label class="label">Schoolnaam <span class="required">*</span></label>
+          <input type="text" class="input" id="schoolName" placeholder="bijv. RSG Enkhuizen" />
+        </div>
+        <div class="form-group">
+          <label class="label">Afkorting (code)</label>
+          <input type="text" class="input" id="schoolCode" placeholder="bijv. RSG" maxlength="10" />
+        </div>
+      </div>
+      <div class="form-row">
+        <div class="form-group">
+          <label class="label">Contactpersoon</label>
+          <input type="text" class="input" id="schoolContact" placeholder="Naam contactpersoon" />
+        </div>
+        <div class="form-group">
+          <label class="label">E-mailadres contactpersoon</label>
+          <input type="email" class="input" id="schoolEmail" placeholder="naam@school.nl" />
+        </div>
+      </div>
+      <div class="form-row">
+        <div class="form-group">
+          <label class="label">Plan / licentie</label>
+          <select class="input" id="schoolPlan">
+            <option value="trial">Proefperiode (30 dagen)</option>
+            <option value="basic">Basic (tot 100 studenten)</option>
+            <option value="standard">Standaard (tot 500 studenten)</option>
+            <option value="enterprise">Enterprise (onbeperkt)</option>
+          </select>
+        </div>
+        <div class="form-group">
+          <label class="label">Opslag quota (GB)</label>
+          <input type="number" class="input" id="schoolStorageGb" value="10" min="1" max="500" />
+        </div>
+      </div>
+
+      <div style="border-top:1px solid var(--border);padding-top:14px;">
+        <div style="font-size:13px;font-weight:600;color:var(--text-secondary);margin-bottom:10px;">
+          Eerste beheerder aanmaken
+        </div>
+        <div class="form-row">
+          <div class="form-group">
+            <label class="label">Naam beheerder</label>
+            <input type="text" class="input" id="adminName" placeholder="Voornaam Achternaam" />
+          </div>
+          <div class="form-group">
+            <label class="label">E-mail beheerder</label>
+            <input type="email" class="input" id="adminEmail" placeholder="beheerder@school.nl" />
+          </div>
+        </div>
+        <div class="form-group">
+          <label class="label">Tijdelijk wachtwoord</label>
+          <div style="display:flex;gap:8px;">
+            <input type="text" class="input" id="adminPassword" placeholder="Automatisch genereren…" style="flex:1;" />
+            <button class="btn btn-ghost" onclick="generatePassword()">Genereer</button>
+          </div>
+        </div>
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-ghost" onclick="closeModal('schoolModal')">Annuleren</button>
+      <button class="btn btn-primary" onclick="saveSchool()">School aanmaken</button>
+    </div>
+  </div>
+</div>
+
+<!-- License modal -->
+<div class="modal-backdrop" id="licenseModal">
+  <div class="modal" style="max-width:460px;">
+    <div class="modal-header">
+      <div class="modal-title">Licentie bewerken</div>
+      <button class="modal-close" onclick="closeModal('licenseModal')">✕</button>
+    </div>
+    <div class="modal-body" style="display:flex;flex-direction:column;gap:14px;">
+      <div class="form-group">
+        <label class="label">School</label>
+        <select class="input" id="licSchool"></select>
+      </div>
+      <div class="form-row">
+        <div class="form-group">
+          <label class="label">Plan</label>
+          <select class="input" id="licPlan">
+            <option value="trial">Proefperiode</option>
+            <option value="basic">Basic</option>
+            <option value="standard">Standaard</option>
+            <option value="enterprise">Enterprise</option>
+          </select>
+        </div>
+        <div class="form-group">
+          <label class="label">Max studenten</label>
+          <input type="number" class="input" id="licMaxStudents" value="100" />
+        </div>
+      </div>
+      <div class="form-row">
+        <div class="form-group">
+          <label class="label">Max opslag (GB)</label>
+          <input type="number" class="input" id="licStorageGb" value="10" />
+        </div>
+        <div class="form-group">
+          <label class="label">Vervaldatum</label>
+          <input type="date" class="input" id="licExpiry" />
+        </div>
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-ghost" onclick="closeModal('licenseModal')">Annuleren</button>
+      <button class="btn btn-primary" onclick="saveLicense()">Opslaan</button>
+    </div>
+  </div>
+</div>
+
+<!-- Toast container -->
+<div class="toast-container" id="toastContainer"></div>
+
+<script>
+/* ═══════════════════════════════════════════════════════════════
+   CONFIG & STATE
+═══════════════════════════════════════════════════════════════ */
+const API = '/api';
+let token = localStorage.getItem('lb_token');
+let schools = [];
+let currentSection = 'dashboard';
+
+/* ═══════════════════════════════════════════════════════════════
+   INIT
+═══════════════════════════════════════════════════════════════ */
+(async function init() {
+  // Auth check
+  if (!token) { window.location.href = '../login.html'; return; }
+
+  // Verify superadmin
+  try {
+    const me = await api('GET', '/auth/me');
+    if (me.role !== 'superadmin') { window.location.href = '../login.html'; return; }
+    document.getElementById('saUserName').textContent = me.name || 'Superadmin';
+    document.getElementById('saAvatar').textContent = (me.name || 'SA').slice(0,2).toUpperCase();
+  } catch { window.location.href = '../login.html'; return; }
+
+  // Theme
+  const saved = localStorage.getItem('lb_theme') || 'light';
+  setTheme(saved);
+
+  // Nav
+  document.querySelectorAll('.sa-nav-item[data-section]').forEach(btn => {
+    btn.addEventListener('click', () => navigateTo(btn.dataset.section));
+  });
+
+  // Theme toggle
+  document.getElementById('themeToggle').addEventListener('click', () => {
+    const cur = document.documentElement.getAttribute('data-theme');
+    setTheme(cur === 'dark' ? 'light' : 'dark');
+  });
+
+  // Search
+  document.getElementById('schoolSearch').addEventListener('input', renderSchoolsList);
+
+  await loadAll();
+})();
+
+function setTheme(t) {
+  document.documentElement.setAttribute('data-theme', t);
+  localStorage.setItem('lb_theme', t);
+  document.getElementById('themeToggle').textContent = t === 'dark' ? '☀️' : '🌙';
+}
+
+async function loadAll() {
+  await Promise.all([loadDashboard(), loadSchools()]);
+}
+
+/* ═══════════════════════════════════════════════════════════════
+   NAVIGATION
+═══════════════════════════════════════════════════════════════ */
+const sectionTitles = {
+  dashboard: 'Dashboard',
+  schools: 'Scholen',
+  licenses: 'Licenties',
+  storage: 'Opslag & gebruik',
+  activity: 'Activiteiten',
+  health: 'Systeemstatus',
+  settings: 'Instellingen',
+  logs: 'Audit logs',
+};
+
+function navigateTo(section) {
+  currentSection = section;
+
+  document.querySelectorAll('.sa-nav-item').forEach(b => b.classList.remove('active'));
+  const btn = document.querySelector(`.sa-nav-item[data-section="${section}"]`);
+  if (btn) btn.classList.add('active');
+
+  document.querySelectorAll('.page-section').forEach(s => s.classList.remove('active'));
+  const el = document.getElementById(`section-${section}`);
+  if (el) el.classList.add('active');
+
+  document.getElementById('pageTitle').textContent = sectionTitles[section] || section;
+
+  // Lazy load
+  if (section === 'licenses') renderLicenseTable();
+  if (section === 'storage') renderStorageTable();
+  if (section === 'activity') renderActivityTable();
+  if (section === 'logs') renderAuditTable();
+  if (section === 'health') renderHealth();
+}
+
+/* ═══════════════════════════════════════════════════════════════
+   API HELPER
+═══════════════════════════════════════════════════════════════ */
+async function api(method, path, body) {
+  const opts = {
+    method,
+    headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
+  };
+  if (body) opts.body = JSON.stringify(body);
+  const r = await fetch(API + path, opts);
+  if (r.status === 401) { localStorage.removeItem('lb_token'); window.location.href = '../login.html'; }
+  const data = await r.json();
+  if (!r.ok) throw new Error(data.error || 'API fout');
+  return data;
+}
+
+/* ═══════════════════════════════════════════════════════════════
+   DASHBOARD
+═══════════════════════════════════════════════════════════════ */
+async function loadDashboard() {
+  try {
+    // Load stats
+    const stats = await api('GET', '/superadmin/stats').catch(() => ({
+      schools_active: 0, schools_total: 0,
+      students_total: 0, documents_total: 0, documents_ocr: 0,
+      storage_gb: 0, sessions_today: 0, licenses_expired: 0,
+    }));
+
+    document.getElementById('statSchools').textContent = stats.schools_active ?? '–';
+    document.getElementById('statSchoolsTotal').textContent = stats.schools_total ?? '–';
+    document.getElementById('statStudents').textContent = stats.students_total ?? '–';
+    document.getElementById('statDocs').textContent = stats.documents_total ?? '–';
+    document.getElementById('statDocsOcr').textContent = stats.documents_ocr ?? '–';
+    document.getElementById('statStorage').textContent = stats.storage_gb ? stats.storage_gb.toFixed(1) : '–';
+    document.getElementById('statSessions').textContent = stats.sessions_today ?? '–';
+    document.getElementById('statExpired').textContent = stats.licenses_expired ?? '–';
+    document.getElementById('ocrQueue').textContent = stats.ocr_queue ?? '–';
+
+    renderSessionsChart(stats.sessions_per_day || []);
+    renderRecentActivity(stats.recent_activity || []);
+  } catch (e) {
+    console.warn('Stats niet beschikbaar (demo modus)');
+    renderSessionsChart([]);
+    renderDemoActivity();
+  }
+}
+
+function renderSessionsChart(data) {
+  const chart = document.getElementById('sessionsChart');
+  const labels = document.getElementById('sessionsChartLabels');
+  // Generate 14 days of demo data if empty
+  const days = data.length ? data : Array.from({length:14}, (_,i) => ({
+    date: new Date(Date.now() - (13-i)*86400000).toLocaleDateString('nl-NL',{weekday:'short'}),
+    count: Math.floor(Math.random() * 30 + 2)
+  }));
+  const max = Math.max(...days.map(d => d.count), 1);
+  chart.innerHTML = days.map(d =>
+    `<div class="chart-bar" style="height:${Math.round((d.count/max)*100)}%;" title="${d.date}: ${d.count} sessies"></div>`
+  ).join('');
+  labels.innerHTML = days.map((d,i) =>
+    `<div class="chart-label">${i % 3 === 0 ? (d.label || d.date) : ''}</div>`
+  ).join('');
+}
+
+function renderRecentActivity(items) {
+  const container = document.getElementById('recentActivity');
+  if (!items.length) { renderDemoActivity(); return; }
+  container.innerHTML = items.slice(0,8).map(item => `
+    <div class="activity-item">
+      <div class="activity-dot"></div>
+      <div>
+        <div class="activity-text"><strong>${escHtml(item.school)}</strong> – ${escHtml(item.description)}</div>
+        <div class="activity-time">${formatTime(item.created_at)}</div>
+      </div>
+    </div>
+  `).join('');
+}
+
+function renderDemoActivity() {
+  const items = [
+    { school: 'RSG Enkhuizen', desc: 'Nieuw document geüpload', time: '5 min geleden' },
+    { school: 'Stedelijk Gymnasium', desc: 'Sessie gestart door leerling', time: '12 min geleden' },
+    { school: 'Calvijn College', desc: 'Admin ingelogd', time: '28 min geleden' },
+    { school: 'RSG Enkhuizen', desc: 'OCR verwerking voltooid', time: '1 uur geleden' },
+    { school: 'Hervormd Lyceum', desc: '3 nieuwe studenten aangemaakt', time: '2 uur geleden' },
+  ];
+  document.getElementById('recentActivity').innerHTML = items.map(i => `
+    <div class="activity-item">
+      <div class="activity-dot"></div>
+      <div>
+        <div class="activity-text"><strong>${i.school}</strong> – ${i.desc}</div>
+        <div class="activity-time">${i.time}</div>
+      </div>
+    </div>
+  `).join('');
+}
+
+/* ═══════════════════════════════════════════════════════════════
+   SCHOLEN
+═══════════════════════════════════════════════════════════════ */
+async function loadSchools() {
+  try {
+    const res = await api('GET', '/superadmin/schools');
+    schools = res.schools || res.data || [];
+  } catch {
+    schools = [
+      { id: 'demo1', name: 'RSG Enkhuizen', code: 'RSG', contact: 'J. de Vries', email: 'j.devries@rsg.nl', plan: 'standard', students: 148, documents: 52, storage_mb: 1240, storage_limit_gb: 20, license_expires: '2026-07-01', active: true },
+      { id: 'demo2', name: 'Stedelijk Gymnasium Amsterdam', code: 'SGA', contact: 'M. Bakker', email: 'm.bakker@sga.nl', plan: 'enterprise', students: 320, documents: 124, storage_mb: 3480, storage_limit_gb: 50, license_expires: '2027-01-01', active: true },
+      { id: 'demo3', name: 'Calvijn College Rotterdam', code: 'CCR', contact: 'P. Smit', email: 'p.smit@calvijn.nl', plan: 'basic', students: 67, documents: 18, storage_mb: 340, storage_limit_gb: 10, license_expires: '2026-05-01', active: false },
+    ];
+  }
+
+  document.getElementById('schoolCountBadge').textContent = schools.length;
+  renderSchoolsList();
+}
+
+function renderSchoolsList() {
+  const q = document.getElementById('schoolSearch').value.toLowerCase();
+  const filtered = schools.filter(s =>
+    s.name.toLowerCase().includes(q) ||
+    (s.code || '').toLowerCase().includes(q) ||
+    (s.contact || '').toLowerCase().includes(q)
+  );
+
+  const container = document.getElementById('schoolsList');
+  if (!filtered.length) {
+    container.innerHTML = `<div class="card" style="padding:40px;text-align:center;color:var(--text-muted);">Geen scholen gevonden.</div>`;
+    return;
+  }
+
+  container.innerHTML = filtered.map(s => {
+    const expiry = new Date(s.license_expires);
+    const now = new Date();
+    const diffDays = Math.ceil((expiry - now) / 86400000);
+    const licClass = !s.active || diffDays < 0 ? 'license-expired' :
+                     diffDays < 30 ? 'license-trial' : 'license-active';
+    const licLabel = !s.active || diffDays < 0 ? '🔴 Verlopen' :
+                     diffDays < 30 ? `⚠️ Verloopt over ${diffDays} dagen` : '✅ Actief';
+    const storPct = s.storage_limit_gb ? Math.round((s.storage_mb||0) / (s.storage_limit_gb*1024) * 100) : 0;
+
+    return `
+    <div class="school-card">
+      <div class="school-card-header" onclick="toggleSchoolDetail('${s.id}')">
+        <div class="school-icon">🏫</div>
+        <div>
+          <div class="school-name">${escHtml(s.name)}</div>
+          <div class="school-meta">${escHtml(s.contact||'')} · ${escHtml(s.email||'')} · Plan: <strong>${s.plan||'–'}</strong></div>
+        </div>
+        <div class="school-stats">
+          <div>
+            <div class="school-stat-num">${s.students||0}</div>
+            <div class="school-stat-label">Studenten</div>
+          </div>
+          <div>
+            <div class="school-stat-num">${s.documents||0}</div>
+            <div class="school-stat-label">Documenten</div>
+          </div>
+          <div>
+            <div class="school-stat-num">${s.storage_mb ? (s.storage_mb/1024).toFixed(1) : '0'}GB</div>
+            <div class="school-stat-label">Opslag</div>
+          </div>
+        </div>
+        <div class="school-actions">
+          <span class="license-badge ${licClass}">${licLabel}</span>
+          <button class="btn btn-ghost btn-sm" onclick="event.stopPropagation();editSchool('${s.id}')">✏️</button>
+          <button class="btn btn-danger btn-sm" onclick="event.stopPropagation();deleteSchool('${s.id}','${escHtml(s.name)}')">🗑</button>
+        </div>
+      </div>
+      <div class="school-detail" id="detail-${s.id}">
+        <div class="school-detail-grid">
+          <div>
+            <div style="font-size:12px;font-weight:600;color:var(--text-muted);margin-bottom:8px;">OPSLAG GEBRUIK</div>
+            <div style="display:flex;align-items:center;gap:10px;">
+              <div style="flex:1;height:8px;background:var(--bg-secondary);border-radius:4px;overflow:hidden;">
+                <div style="height:100%;width:${storPct}%;background:${storPct>85?'var(--danger)':'var(--accent)'};border-radius:4px;"></div>
+              </div>
+              <div style="font-size:12px;color:var(--text-muted);white-space:nowrap;">${storPct}%</div>
+            </div>
+            <div style="font-size:12px;color:var(--text-muted);margin-top:4px;">${s.storage_mb ? (s.storage_mb/1024).toFixed(2) : '0'} GB van ${s.storage_limit_gb||0} GB</div>
+          </div>
+          <div>
+            <div style="font-size:12px;font-weight:600;color:var(--text-muted);margin-bottom:8px;">LICENTIE</div>
+            <div style="font-size:13px;color:var(--text-secondary);">Verloopt op: <strong>${expiry.toLocaleDateString('nl-NL')}</strong></div>
+            <button class="btn btn-ghost btn-sm" style="margin-top:8px;" onclick="openLicenseModalFor('${s.id}')">Licentie aanpassen</button>
+          </div>
+          <div>
+            <div style="font-size:12px;font-weight:600;color:var(--text-muted);margin-bottom:8px;">SNELLE ACTIES</div>
+            <div style="display:flex;flex-wrap:wrap;gap:6px;">
+              <button class="btn btn-ghost btn-sm" onclick="impersonate('${s.id}')">🔑 Inloggen als admin</button>
+              <button class="btn btn-ghost btn-sm" onclick="resetSchoolOcr('${s.id}')">🔄 OCR hervatten</button>
+              <button class="btn btn-ghost btn-sm" onclick="exportSchoolData('${s.id}')">📥 Data exporteren</button>
+            </div>
+          </div>
+          <div>
+            <div style="font-size:12px;font-weight:600;color:var(--text-muted);margin-bottom:8px;">SCHOOL ACTIEF</div>
+            <label class="toggle-switch">
+              <input type="checkbox" ${s.active ? 'checked' : ''} onchange="toggleSchoolActive('${s.id}', this.checked)" />
+              <span class="toggle-slider"></span>
+            </label>
+            <div style="font-size:12px;color:var(--text-muted);margin-top:6px;">${s.active ? 'School is actief' : 'School is uitgeschakeld'}</div>
+          </div>
+        </div>
+      </div>
+    </div>`;
+  }).join('');
+}
+
+function toggleSchoolDetail(id) {
+  const el = document.getElementById(`detail-${id}`);
+  el.classList.toggle('open');
+}
+
+/* ═══════════════════════════════════════════════════════════════
+   SCHOOL MODAL
+═══════════════════════════════════════════════════════════════ */
+function openSchoolModal(school = null) {
+  document.getElementById('schoolModalTitle').textContent = school ? 'School bewerken' : 'School toevoegen';
+  document.getElementById('editSchoolId').value = school?.id || '';
+  document.getElementById('schoolName').value = school?.name || '';
+  document.getElementById('schoolCode').value = school?.code || '';
+  document.getElementById('schoolContact').value = school?.contact || '';
+  document.getElementById('schoolEmail').value = school?.email || '';
+  document.getElementById('schoolPlan').value = school?.plan || 'basic';
+  document.getElementById('schoolStorageGb').value = school?.storage_limit_gb || 10;
+  document.getElementById('adminName').value = '';
+  document.getElementById('adminEmail').value = '';
+  document.getElementById('adminPassword').value = '';
+  openModal('schoolModal');
+}
+
+function editSchool(id) {
+  const s = schools.find(x => x.id === id);
+  if (s) openSchoolModal(s);
+}
+
+function generatePassword() {
+  const chars = 'abcdefghijkmnpqrstuvwxyzABCDEFGHJKLMNPQRSTUVWXYZ23456789!@#';
+  const pass = Array.from({length:12}, () => chars[Math.floor(Math.random()*chars.length)]).join('');
+  document.getElementById('adminPassword').value = pass;
+}
+
+async function saveSchool() {
+  const id = document.getElementById('editSchoolId').value;
+  const body = {
+    name: document.getElementById('schoolName').value.trim(),
+    code: document.getElementById('schoolCode').value.trim(),
+    contact_name: document.getElementById('schoolContact').value.trim(),
+    contact_email: document.getElementById('schoolEmail').value.trim(),
+    plan: document.getElementById('schoolPlan').value,
+    storage_limit_gb: parseInt(document.getElementById('schoolStorageGb').value),
+    admin_name: document.getElementById('adminName').value.trim(),
+    admin_email: document.getElementById('adminEmail').value.trim(),
+    admin_password: document.getElementById('adminPassword').value,
+  };
+  if (!body.name) { showToast('Schoolnaam is verplicht.', 'error'); return; }
+  try {
+    if (id) await api('PUT', `/superadmin/schools/${id}`, body);
+    else await api('POST', '/superadmin/schools', body);
+    showToast(id ? 'School bijgewerkt.' : 'School aangemaakt!', 'success');
+    closeModal('schoolModal');
+    await loadSchools();
+  } catch (e) { showToast(e.message, 'error'); }
+}
+
+async function deleteSchool(id, name) {
+  if (!confirm(`School "${name}" verwijderen? Dit kan niet ongedaan worden gemaakt.`)) return;
+  try {
+    await api('DELETE', `/superadmin/schools/${id}`);
+    showToast('School verwijderd.', 'success');
+    await loadSchools();
+  } catch (e) { showToast(e.message, 'error'); }
+}
+
+async function toggleSchoolActive(id, active) {
+  try {
+    await api('PATCH', `/superadmin/schools/${id}/active`, { active });
+    showToast(active ? 'School geactiveerd.' : 'School uitgeschakeld.', 'success');
+  } catch (e) { showToast(e.message, 'error'); }
+}
+
+async function impersonate(schoolId) {
+  try {
+    const res = await api('POST', `/superadmin/schools/${schoolId}/impersonate`);
+    window.open(`../admin/?token=${res.token}`, '_blank');
+  } catch (e) { showToast('Kan niet inloggen als admin: ' + e.message, 'error'); }
+}
+
+async function resetSchoolOcr(schoolId) {
+  try {
+    await api('POST', `/superadmin/schools/${schoolId}/ocr/retry`);
+    showToast('OCR herstart voor mislukte documenten.', 'success');
+  } catch (e) { showToast(e.message, 'error'); }
+}
+
+function exportSchoolData(schoolId) {
+  window.open(`${API}/superadmin/schools/${schoolId}/export?token=${token}`, '_blank');
+}
+
+/* ═══════════════════════════════════════════════════════════════
+   LICENTIES
+═══════════════════════════════════════════════════════════════ */
+function renderLicenseTable() {
+  const tbody = document.getElementById('licenseTable');
+  tbody.innerHTML = schools.map(s => {
+    const expiry = new Date(s.license_expires);
+    const diffDays = Math.ceil((expiry - new Date()) / 86400000);
+    const cls = diffDays < 0 ? 'license-expired' : diffDays < 30 ? 'license-trial' : 'license-active';
+    const label = diffDays < 0 ? 'Verlopen' : diffDays < 30 ? `Verloopt binnenkort` : 'Actief';
+    return `<tr>
+      <td><strong>${escHtml(s.name)}</strong></td>
+      <td>${s.plan || '–'}</td>
+      <td>${s.students || 0}</td>
+      <td>${s.storage_limit_gb || 0} GB</td>
+      <td>${expiry.toLocaleDateString('nl-NL')}</td>
+      <td><span class="license-badge ${cls}">${label}</span></td>
+      <td><button class="btn btn-ghost btn-sm" onclick="openLicenseModalFor('${s.id}')">✏️ Bewerken</button></td>
+    </tr>`;
+  }).join('') || `<tr><td colspan="7" style="text-align:center;color:var(--text-muted);">Geen scholen gevonden.</td></tr>`;
+}
+
+function openLicenseModal() { openModal('licenseModal'); }
+function openLicenseModalFor(id) {
+  const s = schools.find(x => x.id === id);
+  if (s) {
+    document.getElementById('licSchool').innerHTML = `<option value="${s.id}">${escHtml(s.name)}</option>`;
+    document.getElementById('licPlan').value = s.plan || 'basic';
+    document.getElementById('licMaxStudents').value = s.max_students || 100;
+    document.getElementById('licStorageGb').value = s.storage_limit_gb || 10;
+    if (s.license_expires) {
+      document.getElementById('licExpiry').value = s.license_expires.slice(0,10);
+    }
+  }
+  openModal('licenseModal');
+}
+
+async function saveLicense() {
+  const schoolId = document.getElementById('licSchool').value;
+  const body = {
+    plan: document.getElementById('licPlan').value,
+    max_students: parseInt(document.getElementById('licMaxStudents').value),
+    storage_limit_gb: parseInt(document.getElementById('licStorageGb').value),
+    license_expires: document.getElementById('licExpiry').value,
+  };
+  try {
+    await api('PATCH', `/superadmin/schools/${schoolId}/license`, body);
+    showToast('Licentie bijgewerkt.', 'success');
+    closeModal('licenseModal');
+    await loadSchools();
+    renderLicenseTable();
+  } catch (e) { showToast(e.message, 'error'); }
+}
+
+/* ═══════════════════════════════════════════════════════════════
+   STORAGE TABLE
+═══════════════════════════════════════════════════════════════ */
+function renderStorageTable() {
+  const tbody = document.getElementById('storageTable');
+  tbody.innerHTML = schools.map(s => {
+    const pct = s.storage_limit_gb ? Math.round((s.storage_mb||0) / (s.storage_limit_gb*1024) * 100) : 0;
+    return `<tr>
+      <td><strong>${escHtml(s.name)}</strong></td>
+      <td>${s.documents||0}</td>
+      <td>${s.storage_mb ? (s.storage_mb/1024).toFixed(2) : '0'} GB</td>
+      <td>${s.storage_limit_gb||0} GB</td>
+      <td>
+        <div style="display:flex;align-items:center;gap:8px;">
+          <div style="flex:1;height:6px;background:var(--bg-secondary);border-radius:3px;overflow:hidden;min-width:60px;">
+            <div style="height:100%;width:${pct}%;background:${pct>85?'var(--danger)':pct>60?'#f59e0b':'var(--accent)'};border-radius:3px;"></div>
+          </div>
+          <span style="font-size:12px;color:var(--text-muted);min-width:32px;">${pct}%</span>
+        </div>
+      </td>
+    </tr>`;
+  }).join('') || `<tr><td colspan="5" style="text-align:center;color:var(--text-muted);">Geen data.</td></tr>`;
+}
+
+/* ═══════════════════════════════════════════════════════════════
+   ACTIVITY / AUDIT
+═══════════════════════════════════════════════════════════════ */
+function renderActivityTable() {
+  const tbody = document.getElementById('activityTable');
+  tbody.innerHTML = `<tr><td colspan="5" style="text-align:center;color:var(--text-muted);">
+    Activiteiten worden geladen via de API.</td></tr>`;
+}
+function renderAuditTable() {
+  const tbody = document.getElementById('auditTable');
+  tbody.innerHTML = `<tr><td colspan="6" style="text-align:center;color:var(--text-muted);">
+    Audit logs worden geladen via de API.</td></tr>`;
+}
+
+/* ═══════════════════════════════════════════════════════════════
+   HEALTH
+═══════════════════════════════════════════════════════════════ */
+function renderHealth() {
+  const meters = document.getElementById('storageMeters');
+  meters.innerHTML = schools.map(s => {
+    const pct = s.storage_limit_gb ? Math.round((s.storage_mb||0) / (s.storage_limit_gb*1024) * 100) : 0;
+    return `
+      <div>
+        <div style="display:flex;justify-content:space-between;margin-bottom:4px;">
+          <div style="font-size:13px;font-weight:600;color:var(--text-primary);">${escHtml(s.name)}</div>
+          <div style="font-size:12px;color:var(--text-muted);">${s.storage_mb ? (s.storage_mb/1024).toFixed(1) : '0'} / ${s.storage_limit_gb||0} GB (${pct}%)</div>
+        </div>
+        <div style="height:8px;background:var(--bg-secondary);border-radius:4px;overflow:hidden;">
+          <div style="height:100%;width:${pct}%;background:${pct>85?'var(--danger)':pct>60?'#f59e0b':'var(--accent)'};border-radius:4px;transition:width 0.5s;"></div>
+        </div>
+      </div>`;
+  }).join('');
+}
+
+/* ═══════════════════════════════════════════════════════════════
+   UTILS
+═══════════════════════════════════════════════════════════════ */
+function openModal(id) { document.getElementById(id).classList.add('open'); }
+function closeModal(id) { document.getElementById(id).classList.remove('open'); }
+
+function showToast(msg, type='info') {
+  const c = document.getElementById('toastContainer');
+  const t = document.createElement('div');
+  t.className = `toast toast-${type}`;
+  t.textContent = msg;
+  c.appendChild(t);
+  requestAnimationFrame(() => t.classList.add('show'));
+  setTimeout(() => { t.classList.remove('show'); setTimeout(() => t.remove(), 300); }, 3500);
+}
+
+function formatTime(iso) {
+  if (!iso) return '';
+  const d = new Date(iso);
+  const diff = (Date.now() - d) / 1000;
+  if (diff < 60) return 'zojuist';
+  if (diff < 3600) return `${Math.floor(diff/60)} min geleden`;
+  if (diff < 86400) return `${Math.floor(diff/3600)} uur geleden`;
+  return d.toLocaleDateString('nl-NL');
+}
+
+function escHtml(s) {
+  return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+}
+
+function logout() {
+  localStorage.removeItem('lb_token');
+  window.location.href = '../login.html';
+}
+
+// Close modals on backdrop click
+document.querySelectorAll('.modal-backdrop').forEach(b => {
+  b.addEventListener('click', e => { if (e.target === b) b.classList.remove('open'); });
+});
+</script>
+</body>
+</html>

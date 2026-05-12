@@ -1,5 +1,44 @@
 name = "tekstmaat"
-compatibility_date = "2025-05-12"
-
-[assets]
-directory = "."
+main = "worker/src/index.ts"
+compatibility_date = "2024-01-01"
+compatibility_flags = ["nodejs_compat"]
+ 
+[vars]
+ENVIRONMENT = "production"
+JWT_SECRET = "VERVANG_DIT_MET_EEN_VEILIG_GEHEIM"
+APP_URL = "https://tekstmaat.nl"
+ 
+# R2 bucket voor bestanden
+[[r2_buckets]]
+binding = "FILES_BUCKET"
+bucket_name = "tekstmaat-files"
+preview_bucket_name = "tekstmaat-files-preview"
+ 
+# D1 database
+[[d1_databases]]
+binding = "tekstmaat_db"
+database_name = "tekstmaat-db"
+database_id = "69184d06-e869-4ec7-b275-14982ca7dcba"
+ 
+# KV voor sessies/cache
+[[kv_namespaces]]
+binding = "SESSIONS"
+id = "9be5f1e6ab3c46fa8144616a25a191ea"
+preview_id = "d4e8ce68f0f64d27be7ea78141ed5a4d"
+ 
+# AI binding voor OCR/tekst extractie
+[ai]
+binding = "AI"
+ 
+# Routes voor static assets (frontend)
+[[rules]]
+type = "ESModule"
+globs = ["**/*.ts"]
+ 
+[site]
+bucket = "./frontend/dist"
+ 
+# Development omgeving
+[env.development]
+vars = { ENVIRONMENT = "development", APP_URL = "http://localhost:8787" }
+ 
