@@ -6,7 +6,7 @@ compatibility_flags = ["nodejs_compat"]
 [vars]
 ENVIRONMENT = "production"
 JWT_SECRET = "NyCIK3jrrMMXPhBq6ynQ8I9C3B9mBIL7VQz1Mkz0f5lpkjAnpcJdmRQfBgHwjSJHaAu74tgBYDiTWHzWQ5122w=="
-APP_URL = "https://tekstmaat.nl"
+APP_URL = "https://tekstmaat.foxion-hosting.workers.dev"
  
 # R2 bucket voor bestanden
 [[r2_buckets]]
