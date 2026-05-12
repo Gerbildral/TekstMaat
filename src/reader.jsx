@@ -403,22 +403,37 @@ function TextDocumentViewer({ doc, tokens, curTokIdx, curSentence, highlightMode
 function Reader({ doc, onClose, tweaks }) {
   const fileType = doc.fileType || 'text';
 
-  // TTS-tekst: voor 'text' direct beschikbaar, voor pdf/docx aangeleverd via callback
   const [ttsText, setTtsText] = useState(fileType === 'text' ? (doc.body || '') : '');
   const tokens = useMemo(() => tokenize(ttsText), [ttsText]);
 
-  const [playing,  setPlaying]  = useState(false);
-  const [paused,   setPaused]   = useState(false);
-  const [charIdx,  setCharIdx]  = useState(0);
-  const [rate,     setRate]     = useState(1.0);
-  const [voiceId,  setVoiceId]  = useState(() => {
+  const [playing, setPlaying] = useState(false);
+  const [paused,  setPaused]  = useState(false);
+  const [charIdx, setCharIdx] = useState(0);
+  const [rate,    setRate]    = useState(1.0);
+
+  // ── Engine-keuze ──────────────────────────────────────────────────────────
+  // 'webspeech' = browser ingebouwd (altijd beschikbaar)
+  // 'piper'     = neuraal WASM (downloadt stemmodel ~60 MB)
+  // Wisselen naar externe Piper-server: voeg 'piper-api' toe in tts.jsx
+  const [ttsEngine,    setTtsEngine]    = useState('webspeech');
+  const [wsVoiceId,    setWsVoiceId]    = useState(() => {
     const m = VOICE_PROFILES.find(v => v.lang === doc.lang);
     return (m || VOICE_PROFILES[0]).id;
   });
+  const [piperVoiceId, setPiperVoiceId] = useState('nl-fenna');
+  const [piperLoad,    setPiperLoad]    = useState(null); // null | {phase,pct,sizeMB} | {error:true}
+  const [piperReady,   setPiperReady]   = useState(false);
   const [voicesAvailable, setVoicesAvailable] = useState([]);
+
+  const wsEngineRef    = useRef(null);
+  const piperEngineRef = useRef(null);
+  if (!wsEngineRef.current)    wsEngineRef.current    = new WebSpeechEngine();
+  if (!piperEngineRef.current) piperEngineRef.current = new PiperEngine();
+
   const stageRef = useRef(null);
   const [stageWidth, setStageWidth] = useState(900);
 
+  // Web Speech stemmen ophalen
   useEffect(() => {
     if (!('speechSynthesis' in window)) return;
     const update = () => setVoicesAvailable(window.speechSynthesis.getVoices());
@@ -433,63 +448,78 @@ function Reader({ doc, onClose, tweaks }) {
     return () => ro.disconnect();
   }, []);
 
-  const pickVoice = useCallback((profileId) => {
-    const profile = VOICE_PROFILES.find(v => v.id === profileId) || VOICE_PROFILES[0];
-    const sameLang = voicesAvailable.filter(v => v.lang.toLowerCase().startsWith(profile.lang.slice(0, 2).toLowerCase()));
-    if (!sameLang.length) return null;
-    return sameLang.find(v => profile.match.test(v.name)) || sameLang[0];
-  }, [voicesAvailable]);
+  // Laad Piper zodra de gebruiker er naar wisselt
+  useEffect(() => {
+    if (ttsEngine !== 'piper' || piperReady) return;
+    setPiperLoad({ phase: 'module', pct: 0, sizeMB: 0 });
+    piperEngineRef.current.load(piperVoiceId, (p) => setPiperLoad(p))
+      .then(() => { setPiperReady(true); setPiperLoad(null); })
+      .catch((err) => { console.error('Piper laden mislukt:', err); setPiperLoad({ error: true }); });
+  }, [ttsEngine, piperVoiceId]);
+
+  // Herlaad Piper als stem verandert terwijl al in Piper-modus
+  useEffect(() => {
+    setPiperReady(false);
+  }, [piperVoiceId]);
+
+  // ── TTS callbacks ─────────────────────────────────────────────────────────
+  const ttsCallbacks = useCallback(() => ({
+    rate,
+    onStart:    () => { setPlaying(true); setPaused(false); },
+    onBoundary: (idx) => setCharIdx(idx),
+    onEnd:      () => { setPlaying(false); setPaused(false); setCharIdx(ttsText.length); },
+    onError:    (e) => { console.warn('TTS fout:', e); setPlaying(false); },
+  }), [rate, ttsText]);
+
+  const activeEngine = useCallback(() =>
+    ttsEngine === 'piper' ? piperEngineRef.current : wsEngineRef.current
+  , [ttsEngine]);
 
   const stop = useCallback(() => {
-    if ('speechSynthesis' in window) window.speechSynthesis.cancel();
+    wsEngineRef.current.stop();
+    piperEngineRef.current.stop();
     setPlaying(false); setPaused(false); setCharIdx(0);
   }, []);
 
   const speakFrom = useCallback((startChar = 0) => {
-    if (!('speechSynthesis' in window)) { alert('Web Speech API niet beschikbaar in deze browser.'); return; }
     if (!ttsText) return;
-    window.speechSynthesis.cancel();
-    const u = new SpeechSynthesisUtterance(ttsText.slice(startChar));
-    u.rate = rate;
-    u.lang = (VOICE_PROFILES.find(v => v.id === voiceId) || VOICE_PROFILES[0]).lang;
-    const v = pickVoice(voiceId);
-    if (v) u.voice = v;
-    u.onstart   = () => { setPlaying(true); setPaused(false); };
-    u.onboundary = (ev) => {
-      if (ev.name === 'word' || !ev.name) setCharIdx(startChar + (ev.charIndex || 0));
-    };
-    u.onend   = () => { setPlaying(false); setPaused(false); setCharIdx(ttsText.length); };
-    u.onerror = (e) => {
-      if (e.error && e.error !== 'interrupted' && e.error !== 'canceled') console.warn('TTS fout:', e.error);
-    };
-    window.speechSynthesis.speak(u);
-  }, [ttsText, rate, voiceId, pickVoice]);
+
+    if (ttsEngine === 'webspeech') {
+      const profile = VOICE_PROFILES.find(v => v.id === wsVoiceId) || VOICE_PROFILES[0];
+      wsEngineRef.current.speak(ttsText, startChar, {
+        ...ttsCallbacks(),
+        voiceProfile: profile,
+        voicesAvailable,
+      });
+    } else {
+      if (!piperReady) return;
+      piperEngineRef.current.speak(ttsText, startChar, ttsCallbacks());
+    }
+  }, [ttsText, ttsEngine, wsVoiceId, piperReady, voicesAvailable, ttsCallbacks]);
 
   const play = useCallback(() => {
-    if (paused && 'speechSynthesis' in window) {
-      window.speechSynthesis.resume(); setPaused(false); setPlaying(true);
+    if (paused) {
+      activeEngine().resume(); setPaused(false); setPlaying(true);
     } else {
       speakFrom(charIdx);
     }
-  }, [paused, charIdx, speakFrom]);
+  }, [paused, charIdx, speakFrom, activeEngine]);
 
   const pause = useCallback(() => {
-    if ('speechSynthesis' in window) window.speechSynthesis.pause();
-    setPaused(true); setPlaying(false);
-  }, []);
+    activeEngine().pause(); setPaused(true); setPlaying(false);
+  }, [activeEngine]);
 
   // Herstart bij tempo- of stemwijziging tijdens afspelen
-  useEffect(() => { if (playing) speakFrom(charIdx); }, [rate, voiceId]);
+  useEffect(() => { if (playing) speakFrom(charIdx); }, [rate, wsVoiceId, piperVoiceId]);
 
-  // Stop bij sluiten
-  useEffect(() => () => { if ('speechSynthesis' in window) window.speechSynthesis.cancel(); }, []);
-
-  // Start TTS automatisch zodra de PDF/DOCX-tekst beschikbaar komt
-  const handleTextReady = useCallback((text) => {
-    setTtsText(text);
+  // Ruim engines op bij sluiten
+  useEffect(() => () => {
+    wsEngineRef.current.destroy();
+    piperEngineRef.current.destroy();
   }, []);
 
-  // Klik op woord → spring naar die positie
+  const handleTextReady = useCallback((text) => setTtsText(text), []);
+
   const onTokenClick = useCallback((tok) => {
     setCharIdx(tok.start);
     if (playing || paused) speakFrom(tok.start);
@@ -542,8 +572,12 @@ function Reader({ doc, onClose, tweaks }) {
     <div className="reader-shell" style={{ background: stageBg }}>
       <ReaderToolbar
         doc={doc} playing={playing} paused={paused} rate={rate} setRate={setRate}
-        voiceId={voiceId} setVoiceId={setVoiceId} play={play} pause={pause} stop={stop}
+        play={play} pause={pause} stop={stop}
         progress={progress} onClose={onClose} canPlay={!!ttsText} fileType={fileType}
+        ttsEngine={ttsEngine}      setTtsEngine={setTtsEngine}
+        wsVoiceId={wsVoiceId}      setWsVoiceId={setWsVoiceId}
+        piperVoiceId={piperVoiceId} setPiperVoiceId={setPiperVoiceId}
+        piperLoad={piperLoad}      piperReady={piperReady}
       />
 
       <div className="reader-stage" ref={stageRef} style={{ background: stageBg }}>
@@ -592,9 +626,28 @@ function Reader({ doc, onClose, tweaks }) {
 }
 
 // ─── Toolbar ──────────────────────────────────────────────────────────────────
-function ReaderToolbar({ doc, playing, paused, rate, setRate, voiceId, setVoiceId, play, pause, stop, progress, onClose, canPlay, fileType }) {
+function ReaderToolbar({
+  doc, playing, paused, rate, setRate,
+  play, pause, stop, progress, onClose, canPlay, fileType,
+  ttsEngine, setTtsEngine,
+  wsVoiceId, setWsVoiceId,
+  piperVoiceId, setPiperVoiceId,
+  piperLoad, piperReady,
+}) {
+  const piperLoading = ttsEngine === 'piper' && piperLoad && !piperLoad.error;
+  const piperError   = ttsEngine === 'piper' && piperLoad?.error;
+  const canPlayNow   = canPlay && (ttsEngine === 'webspeech' || piperReady);
+
+  // Laadtekst voor Piper
+  let piperStatusText = '';
+  if (piperLoading) {
+    piperStatusText = piperLoad.phase === 'module'
+      ? 'Piper laden…'
+      : `Stemmodel downloaden… ${piperLoad.pct}% (${piperLoad.sizeMB} MB)`;
+  }
+
   return (
-    <div className="reader-bar">
+    <div className="reader-bar" style={{ flexWrap: 'wrap', height: 'auto', minHeight: 64 }}>
       <button className="btn btn-ghost btn-icon" onClick={onClose} title="Sluiten">
         <Icon name="arrowLeft" size={18} />
       </button>
@@ -605,32 +658,36 @@ function ReaderToolbar({ doc, playing, paused, rate, setRate, voiceId, setVoiceI
           {playing
             ? <span className="row" style={{ gap: 6, color: 'var(--primary)' }}><span className="live-dot" />Voorlezen</span>
             : paused
-              ? <span className="row" style={{ gap: 6, color: 'var(--muted)' }}>Gepauzeerd</span>
-              : !canPlay
-                ? <span style={{ color: 'var(--muted)' }}>
-                    {fileType === 'pdf' ? 'PDF laden…' : fileType === 'docx' ? 'Document laden…' : 'Klaar'}
-                  </span>
-                : <span style={{ color: 'var(--muted)' }}>Klaar om te starten</span>}
+              ? <span style={{ color: 'var(--muted)' }}>Gepauzeerd</span>
+              : piperLoading
+                ? <span style={{ color: 'var(--muted)' }}>{piperStatusText}</span>
+                : piperError
+                  ? <span style={{ color: 'var(--danger)' }}>Piper laden mislukt</span>
+                  : !canPlay
+                    ? <span style={{ color: 'var(--muted)' }}>
+                        {fileType === 'pdf' ? 'PDF laden…' : fileType === 'docx' ? 'Document laden…' : 'Klaar'}
+                      </span>
+                    : <span style={{ color: 'var(--muted)' }}>Klaar om te starten</span>}
           <span style={{ color: 'var(--muted-2)' }}>·</span>
           <span style={{ color: 'var(--muted)' }}>{progress}%</span>
-          {fileType !== 'text' && (
-            <>
-              <span style={{ color: 'var(--muted-2)' }}>·</span>
-              <span className="chip" style={{ fontSize: 11, padding: '1px 7px' }}>
-                {fileType.toUpperCase()}
-              </span>
-            </>
-          )}
         </div>
+
+        {/* Piper download-voortgangsbalk */}
+        {piperLoading && piperLoad.phase === 'model' && (
+          <div className="progress-bar" style={{ marginTop: 4, width: '100%', maxWidth: 260 }}>
+            <div style={{ width: `${piperLoad.pct}%` }} />
+          </div>
+        )}
       </div>
 
-      <div className="row" style={{ gap: 8 }}>
+      <div className="row" style={{ gap: 8, flexWrap: 'wrap' }}>
+        {/* Afspeel-knoppen */}
         <div className="reader-controls">
           {!playing
-            ? <button className="reader-play" onClick={play} disabled={!canPlay} title="Afspelen (spatie)">
+            ? <button className="reader-play" onClick={play} disabled={!canPlayNow || piperLoading} title="Afspelen">
                 <Icon name="play" size={18} />
               </button>
-            : <button className="reader-play" onClick={pause} title="Pauzeren (spatie)">
+            : <button className="reader-play" onClick={pause} title="Pauzeren">
                 <Icon name="pause" size={18} />
               </button>}
           <button className="btn btn-ghost btn-icon" onClick={stop} title="Stoppen">
@@ -640,6 +697,7 @@ function ReaderToolbar({ doc, playing, paused, rate, setRate, voiceId, setVoiceI
 
         <div className="reader-divider" />
 
+        {/* Snelheid */}
         <div className="reader-select">
           <label>Snelheid</label>
           <div className="row" style={{ gap: 4 }}>
@@ -655,23 +713,54 @@ function ReaderToolbar({ doc, playing, paused, rate, setRate, voiceId, setVoiceI
 
         <div className="reader-divider" />
 
+        {/* Engine-keuze */}
+        <div className="reader-select">
+          <label>Voorlees-engine</label>
+          <div className="row" style={{ gap: 4 }}>
+            <button
+              className={'btn btn-sm ' + (ttsEngine === 'webspeech' ? 'btn-primary' : 'btn-ghost')}
+              onClick={() => setTtsEngine('webspeech')}
+              title="Browser ingebouwd — direct klaar"
+            >Browser</button>
+            <button
+              className={'btn btn-sm ' + (ttsEngine === 'piper' ? 'btn-primary' : 'btn-ghost')}
+              onClick={() => setTtsEngine('piper')}
+              title="Piper neuraal — betere kwaliteit, download vereist"
+            >
+              {piperLoading ? <span className="spinner" style={{ width: 12, height: 12, borderWidth: 1.5 }} /> : null}
+              Piper
+            </button>
+          </div>
+        </div>
+
+        <div className="reader-divider" />
+
+        {/* Stem (per engine) */}
         <div className="reader-select">
           <label>Stem</label>
-          <select value={voiceId} onChange={(e) => setVoiceId(e.target.value)} className="reader-voice-select">
-            <optgroup label="Nederlands">
-              <option value="nl-lotte">Lotte (NL)</option>
-              <option value="nl-daan">Daan (NL)</option>
-            </optgroup>
-            <optgroup label="English">
-              <option value="en-olivia">Olivia (UK)</option>
-              <option value="en-aaron">Aaron (US)</option>
-            </optgroup>
-            <optgroup label="Andere">
-              <option value="de-anna">Anna (DE)</option>
-              <option value="fr-amelie">Amélie (FR)</option>
-              <option value="es-monica">Mónica (ES)</option>
-            </optgroup>
-          </select>
+          {ttsEngine === 'webspeech' ? (
+            <select value={wsVoiceId} onChange={(e) => setWsVoiceId(e.target.value)} className="reader-voice-select">
+              <optgroup label="Nederlands">
+                <option value="nl-lotte">Lotte (NL)</option>
+                <option value="nl-daan">Daan (NL)</option>
+              </optgroup>
+              <optgroup label="English">
+                <option value="en-olivia">Olivia (UK)</option>
+                <option value="en-aaron">Aaron (US)</option>
+              </optgroup>
+              <optgroup label="Andere">
+                <option value="de-anna">Anna (DE)</option>
+                <option value="fr-amelie">Amélie (FR)</option>
+                <option value="es-monica">Mónica (ES)</option>
+              </optgroup>
+            </select>
+          ) : (
+            <select value={piperVoiceId} onChange={(e) => setPiperVoiceId(e.target.value)} className="reader-voice-select">
+              {PIPER_VOICES.map(v => (
+                <option key={v.id} value={v.id}>{v.label} — {v.sizeMB} MB</option>
+              ))}
+            </select>
+          )}
         </div>
       </div>
 
