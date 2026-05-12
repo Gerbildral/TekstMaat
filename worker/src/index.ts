@@ -19,6 +19,9 @@ export interface Env {
   JWT_SECRET: string;
   ENVIRONMENT: string;
   APP_URL: string;
+  // Workers Sites – automatisch aangemaakt door Wrangler via [site] in wrangler.toml
+  __STATIC_CONTENT: KVNamespace;
+  __STATIC_CONTENT_MANIFEST: string;
 }
 
 export interface AuthUser {
@@ -42,7 +45,7 @@ export default {
 
     // Serve frontend voor niet-API routes
     if (!path.startsWith('/api/')) {
-      return serveStaticAsset(request, env, ctx);
+      return serveStaticAsset(request, env);
     }
 
     try {
@@ -97,11 +100,50 @@ export default {
   }
 };
 
-async function serveStaticAsset(request: Request, env: Env, ctx: ExecutionContext): Promise<Response> {
-  // In productie: Cloudflare Pages serveert de frontend
-  // In development: geef een redirect naar de frontend dev server
-  return new Response(
-    `<!DOCTYPE html><html><body><h1>TekstMaat API</h1><p>Frontend wordt geserveerd via Cloudflare Pages.</p></body></html>`,
-    { headers: { 'Content-Type': 'text/html' } }
-  );
+async function serveStaticAsset(request: Request, env: Env): Promise<Response> {
+  const url = new URL(request.url);
+  let pathname = url.pathname;
+
+  // Root redirect naar login
+  if (pathname === '/' || pathname === '') pathname = '/login.html';
+
+  const key = pathname.replace(/^\//, '');
+
+  try {
+    const manifest: Record<string, string> = JSON.parse(env.__STATIC_CONTENT_MANIFEST);
+    let hashedKey = manifest[key];
+
+    // Probeer index.html als de map wordt opgevraagd (bijv. /admin/)
+    if (!hashedKey) {
+      const indexKey = key.replace(/\/?$/, 'index.html').replace(/^\//, '');
+      hashedKey = manifest[indexKey] || manifest[indexKey.replace('index.html', '/index.html').replace(/^\//, '')];
+      if (!hashedKey) return new Response('Pagina niet gevonden', { status: 404 });
+    }
+
+    const content = await env.__STATIC_CONTENT.get(hashedKey, { type: 'arrayBuffer' });
+    if (!content) return new Response('Bestand niet gevonden', { status: 404 });
+
+    const ext = key.split('.').pop() || '';
+    const mimeTypes: Record<string, string> = {
+      html: 'text/html; charset=utf-8',
+      css:  'text/css; charset=utf-8',
+      js:   'application/javascript; charset=utf-8',
+      json: 'application/json',
+      png:  'image/png',
+      jpg:  'image/jpeg',
+      svg:  'image/svg+xml',
+      ico:  'image/x-icon',
+      woff2:'font/woff2',
+      woff: 'font/woff',
+    };
+
+    return new Response(content, {
+      headers: {
+        'Content-Type': mimeTypes[ext] || 'application/octet-stream',
+        'Cache-Control': ext === 'html' ? 'no-cache' : 'public, max-age=31536000, immutable',
+      },
+    });
+  } catch (e) {
+    return new Response('Fout bij laden van pagina: ' + e, { status: 500 });
+  }
 }
