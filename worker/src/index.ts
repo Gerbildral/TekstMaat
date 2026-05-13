@@ -24,7 +24,8 @@ export interface Env {
   APP_URL: string;
   CDN_URL: string;
   FROM_EMAIL: string;
-  INWORLD_API_KEY: string;
+  ELEVENLABS_API_KEY: string;
+  ELEVENLABS_VOICES: string;
 }
 
 export interface AuthUser {

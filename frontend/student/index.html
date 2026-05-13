@@ -291,14 +291,16 @@
       pointer-events: none;
       z-index: 10;
     }
+    .sentence-highlight {
+      position: absolute;
+      background: rgba(255, 230, 0, 0.22);
+      border-radius: 3px;
+    }
     .word-highlight {
       position: absolute;
-      background: rgba(255, 230, 0, 0.45);
+      background: rgba(255, 140, 0, 0.55);
       border-radius: 2px;
-      transition: opacity 100ms;
-    }
-    .word-highlight.active {
-      background: rgba(255, 160, 0, 0.6);
+      outline: 1px solid rgba(255, 100, 0, 0.3);
     }
 
     /* Pagina nummering */
@@ -792,8 +794,6 @@ async function rerender() {
     await renderThumbnail(i);
   }
   scrollToPage(currentPage);
-  // Herplaats highlights
-  highlightCurrentWord();
 }
 
 // ============================================================
@@ -872,12 +872,23 @@ async function loadTextFromPDF() {
     pageTexts.push({ page: pageNum, text: cleanText, words: wordPositions });
 
     const sents = splitSentences(cleanText);
+    // Koppel PDF-woordposities aan zinnen via sequentieel scannen
+    let wpCursor = 0;
     for (const sent of sents) {
       const trimmed = sent.trim();
-      if (trimmed.length > 2) {
-        sentences.push({ text: trimmed, page: pageNum, charStart: totalCharCount });
-        totalCharCount += trimmed.length + 1;
+      if (trimmed.length <= 2) continue;
+
+      const tokens = trimmed.toLowerCase().split(/\s+/).map(w => w.replace(/\W/g, '')).filter(Boolean);
+      const wpStart = wpCursor;
+      let matched = 0;
+
+      for (let i = wpCursor; i < wordPositions.length && matched < tokens.length; i++) {
+        const wp = (wordPositions[i].word || '').toLowerCase().replace(/\W/g, '');
+        if (wp === tokens[matched]) { matched++; wpCursor = i + 1; }
       }
+
+      sentences.push({ text: trimmed, page: pageNum, charStart: totalCharCount, wpStart, wpEnd: wpCursor });
+      totalCharCount += trimmed.length + 1;
     }
   }
 
@@ -936,6 +947,28 @@ function pcmBase64ToAudioBuffer(base64) {
   return buffer;
 }
 
+// Zet ElevenLabs karakter-alignment om naar woord-timings
+function charsToWordTimings(alignment) {
+  if (!alignment?.characters?.length) return [];
+  const { characters, character_start_times_seconds: starts, character_end_times_seconds: ends } = alignment;
+  const words = [];
+  let word = '', wordStart = 0;
+  for (let i = 0; i < characters.length; i++) {
+    const ch = characters[i];
+    if (!ch?.trim()) {
+      if (word) {
+        words.push({ word, start: wordStart, end: ends[i - 1] ?? wordStart });
+        word = '';
+      }
+    } else {
+      if (!word) wordStart = starts[i] ?? 0;
+      word += ch;
+    }
+  }
+  if (word) words.push({ word, start: wordStart, end: ends[characters.length - 1] ?? wordStart });
+  return words;
+}
+
 async function speakCurrentSentence() {
   if (!isPlaying || currentSentenceIdx >= sentences.length) {
     if (currentSentenceIdx >= sentences.length) {
@@ -947,7 +980,6 @@ async function speakCurrentSentence() {
     return;
   }
 
-  // AudioContext vereist een gebruikersgebaar — wordt bij eerste play aangemaakt
   if (!audioCtx || audioCtx.state === 'closed') {
     audioCtx = new (window.AudioContext || window.webkitAudioContext)({ sampleRate: TTS_SAMPLE_RATE });
   }
@@ -957,7 +989,7 @@ async function speakCurrentSentence() {
   const startIdx = currentSentenceIdx;
   const startPage = sentences[startIdx].page;
   let chunkText = '';
-  const boundaries = [];
+  const boundaries = []; // { idx, localStart }
 
   for (let i = startIdx; i < sentences.length; i++) {
     const s = sentences[i];
@@ -968,19 +1000,24 @@ async function speakCurrentSentence() {
   }
 
   const lastBound = boundaries[boundaries.length - 1];
-
-  const firstSent = sentences[startIdx];
-  if (firstSent.page !== currentPage) scrollToPage(firstSent.page);
+  if (sentences[startIdx].page !== currentPage) scrollToPage(sentences[startIdx].page);
 
   ttsController?.abort();
   ttsController = new AbortController();
   nextAudioTime = audioCtx.currentTime + 0.05;
 
+  // Highlight eerste zin alvast
+  highlightSentenceAndWord(sentences[startIdx], -1, 0);
+
   try {
     const res = await fetch(`${API}/api/tts`, {
       method: 'POST',
       headers: { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json' },
-      body: JSON.stringify({ text: chunkText, voiceId: inworldVoiceId, speakingRate: Math.min(currentSpeed, 1.5) }),
+      body: JSON.stringify({
+        text: chunkText,
+        voiceId: inworldVoiceId,
+        speed: Math.max(0.7, Math.min(1.2, currentSpeed)),
+      }),
       signal: ttsController.signal,
     });
 
@@ -989,7 +1026,7 @@ async function speakCurrentSentence() {
     const reader = res.body.getReader();
     const decoder = new TextDecoder();
     let buffer = '';
-    let searchPos = 0; // positie in chunkText voor woordmatching
+    let searchPos = 0;
 
     while (true) {
       const { done, value } = await reader.read();
@@ -1000,18 +1037,18 @@ async function speakCurrentSentence() {
       buffer = lines.pop() ?? '';
 
       for (const line of lines) {
-        if (!line.trim()) continue;
-        let chunk;
-        try { chunk = JSON.parse(line); } catch { continue; }
+        // ElevenLabs stuurt SSE: elke event-regel begint met "data: "
+        if (!line.startsWith('data: ')) continue;
+        const data = line.slice(6).trim();
+        if (!data || data === '[DONE]') continue;
 
-        const result = chunk.result;
-        if (!result?.audioContent) continue;
+        let chunk;
+        try { chunk = JSON.parse(data); } catch { continue; }
+        if (!chunk.audio_base64) continue;
 
         // Decodeer PCM en plan afspelen
-        const audioBuffer = pcmBase64ToAudioBuffer(result.audioContent);
-        if (nextAudioTime < audioCtx.currentTime + 0.02) {
-          nextAudioTime = audioCtx.currentTime + 0.05;
-        }
+        const audioBuffer = pcmBase64ToAudioBuffer(chunk.audio_base64);
+        if (nextAudioTime < audioCtx.currentTime + 0.02) nextAudioTime = audioCtx.currentTime + 0.05;
         const chunkStart = nextAudioTime;
         const source = audioCtx.createBufferSource();
         source.buffer = audioBuffer;
@@ -1020,37 +1057,33 @@ async function speakCurrentSentence() {
         nextAudioTime += audioBuffer.duration;
         scheduledSources.push(source);
 
-        // Plan word-highlights op basis van Inworld timestamps
-        const wa = result.timestampInfo?.wordAlignment;
-        if (wa?.words?.length) {
-          for (let wi = 0; wi < wa.words.length; wi++) {
-            const rawWord = wa.words[wi];
-            const cleanWord = rawWord.replace(/\W/g, '');
-            if (!cleanWord) continue;
+        // Plan highlights via ElevenLabs karakter-timestamps → woord-timings
+        const wordTimings = charsToWordTimings(chunk.alignment ?? chunk.normalized_alignment);
+        for (const wt of wordTimings) {
+          const clean = wt.word.replace(/\W/g, '');
+          if (!clean) continue;
 
-            const idx = chunkText.toLowerCase().indexOf(cleanWord.toLowerCase(), searchPos);
-            if (idx < 0) continue;
-            searchPos = idx + cleanWord.length;
+          const idx = chunkText.toLowerCase().indexOf(clean.toLowerCase(), searchPos);
+          if (idx < 0) continue;
+          searchPos = idx + clean.length;
 
-            let activeBound = boundaries[0];
-            for (const b of boundaries) {
-              if (b.localStart <= idx) activeBound = b;
-              else break;
-            }
-            const sentIdx = activeBound.idx;
-            const localChar = idx - activeBound.localStart;
-            const wordLen = cleanWord.length;
-            const delay = Math.max(0, (chunkStart + wa.wordStartTimeSeconds[wi] - audioCtx.currentTime) * 1000);
-
-            wordTimers.push(setTimeout(() => {
-              if (!isPlaying) return;
-              currentSentenceIdx = sentIdx;
-              const sent = sentences[sentIdx];
-              if (sent?.page !== currentPage) scrollToPage(sent.page);
-              highlightWord(sent, localChar, wordLen);
-              updateTTSProgress(sent.charStart + localChar);
-            }, delay));
+          let activeBound = boundaries[0];
+          for (const b of boundaries) {
+            if (b.localStart <= idx) activeBound = b;
+            else break;
           }
+          const sentIdx = activeBound.idx;
+          const localChar = idx - activeBound.localStart;
+          const delay = Math.max(0, (chunkStart + wt.start - audioCtx.currentTime) * 1000);
+
+          wordTimers.push(setTimeout(() => {
+            if (!isPlaying) return;
+            currentSentenceIdx = sentIdx;
+            const sent = sentences[sentIdx];
+            if (sent?.page !== currentPage) scrollToPage(sent.page);
+            highlightSentenceAndWord(sent, localChar, clean.length);
+            updateTTSProgress(sent.charStart + localChar);
+          }, delay));
         }
       }
     }
@@ -1064,14 +1097,12 @@ async function speakCurrentSentence() {
     return;
   }
 
-  // Wacht tot geplande audio klaar is, ga dan naar volgende chunk
   if (isPlaying) {
     const remaining = Math.max(0, (nextAudioTime - audioCtx.currentTime) * 1000);
     setTimeout(() => {
       if (!isPlaying) return;
       currentSentenceIdx = lastBound.idx + 1;
-      const lastSent = sentences[lastBound.idx];
-      processedChars = lastSent.charStart + lastSent.text.length;
+      processedChars = sentences[lastBound.idx].charStart + sentences[lastBound.idx].text.length;
       speakCurrentSentence();
     }, remaining);
   }
@@ -1132,46 +1163,76 @@ function changeVoice(voiceId) {
 // ============================================================
 //  HIGHLIGHTING
 // ============================================================
-function highlightWord(sentence, charIndex, charLength) {
+
+// Tekent zinmarkering (licht geel per tekstregel) + woordmarkering (oranje)
+function highlightSentenceAndWord(sent, charIdx, wordLen) {
   clearHighlights();
+  if (!sent) return;
 
-  // Probeer het woord te vinden in de geëxtraheerde tekst
-  const pageData = pageTexts.find(p => p.page === sentence.page);
-  if (!pageData?.words?.length) {
-    // Fallback: markeer heel scherm vaag
-    return;
-  }
-
-  const word = sentence.text.substring(charIndex, charIndex + charLength).toLowerCase().trim();
-  if (!word) return;
-
-  // Zoek het woord in de pagina tekst
-  const match = pageData.words.find(w => w.word?.toLowerCase() === word);
-  if (!match) return;
-
-  const pageInfo = pdfPages[sentence.page];
+  const pageData = pageTexts.find(p => p.page === sent.page);
+  if (!pageData?.words?.length) return;
+  const pageInfo = pdfPages[sent.page];
   if (!pageInfo) return;
-
-  const overlay = document.getElementById(`highlight-overlay-${sentence.page}`);
+  const overlay = document.getElementById(`highlight-overlay-${sent.page}`);
   if (!overlay) return;
 
   const scale = pageInfo.viewport.scale;
-  const highlight = document.createElement('div');
-  highlight.className = 'word-highlight active';
-  highlight.style.left = (match.x * scale) + 'px';
-  highlight.style.top = (match.y * scale) + 'px';
-  highlight.style.width = (match.w * scale) + 'px';
-  highlight.style.height = (match.h * scale) + 'px';
+  const sentWps = pageData.words.slice(sent.wpStart ?? 0, sent.wpEnd ?? pageData.words.length)
+    .filter(w => w?.word);
 
-  overlay.appendChild(highlight);
+  // --- Zin-highlight: groepeer woorden per tekstRegel, teken per regel een blok ---
+  if (sentWps.length) {
+    const lines = [];
+    for (const wp of sentWps) {
+      const existing = lines.find(l => Math.abs(l.refY - wp.y) < wp.h * 0.6);
+      if (existing) { existing.wps.push(wp); }
+      else { lines.push({ refY: wp.y, wps: [wp] }); }
+    }
+    for (const line of lines) {
+      const minX = Math.min(...line.wps.map(w => w.x)) - 1;
+      const minY = Math.min(...line.wps.map(w => w.y)) - 2;
+      const maxX = Math.max(...line.wps.map(w => w.x + w.w)) + 1;
+      const maxY = Math.max(...line.wps.map(w => w.y + w.h)) + 2;
+      const el = document.createElement('div');
+      el.className = 'sentence-highlight';
+      el.style.left  = (minX * scale) + 'px';
+      el.style.top   = (minY * scale) + 'px';
+      el.style.width  = ((maxX - minX) * scale) + 'px';
+      el.style.height = ((maxY - minY) * scale) + 'px';
+      overlay.appendChild(el);
+    }
+  }
+
+  // --- Woord-highlight: zoek het specifieke woord in de zin-range ---
+  if (charIdx < 0 || wordLen <= 0) return;
+  const wordText = sent.text.substring(charIdx, charIdx + wordLen).replace(/\W/g, '').toLowerCase();
+  if (!wordText) return;
+
+  // Bepaal het ordinal-nummer (hoeveelste voorkomen in de zin)
+  const ordinal = sent.text.slice(0, charIdx).toLowerCase()
+    .split(/\s+/).map(w => w.replace(/\W/g, '')).filter(w => w === wordText).length;
+
+  let count = 0;
+  for (const wp of sentWps) {
+    const wpClean = wp.word.replace(/\W/g, '').toLowerCase();
+    if (wpClean === wordText) {
+      if (count === ordinal) {
+        const el = document.createElement('div');
+        el.className = 'word-highlight';
+        el.style.left  = (wp.x * scale) + 'px';
+        el.style.top   = (wp.y * scale) + 'px';
+        el.style.width  = (wp.w * scale) + 'px';
+        el.style.height = (wp.h * scale) + 'px';
+        overlay.appendChild(el);
+        break;
+      }
+      count++;
+    }
+  }
 }
 
 function clearHighlights() {
   document.querySelectorAll('.highlight-overlay').forEach(o => o.innerHTML = '');
-}
-
-function highlightCurrentWord() {
-  // Na rerender: herplaats huidige highlight
 }
 
 // ============================================================
@@ -1227,31 +1288,19 @@ function seekToPosition(event) {
 }
 
 // ============================================================
-//  STEMMEN (Inworld)
+//  STEMMEN (ElevenLabs — geconfigureerd via ELEVENLABS_VOICES)
 // ============================================================
 async function loadInworldVoices() {
   const select = document.getElementById('voiceSelect');
   try {
     const voices = await api('/tts/voices');
     if (!Array.isArray(voices) || voices.length === 0) throw new Error('geen stemmen');
-
-    select.innerHTML = voices
-      .map(v => `<option value="${v.voiceId}">${v.displayName || v.voiceId}</option>`)
-      .join('');
-
-    // Selecteer standaardstem
-    const preferred = voices.find(v => v.voiceId === inworldVoiceId) || voices[0];
-    inworldVoiceId = preferred.voiceId;
+    select.innerHTML = voices.map(v => `<option value="${v.id}">${v.name}</option>`).join('');
+    // Selecteer eerste stem als standaard
+    inworldVoiceId = voices[0].id;
     select.value = inworldVoiceId;
   } catch {
-    // Fallback: vaste kleine lijst zodat de selector niet leeg is
-    const fallback = [
-      { voiceId: 'Ashley', label: 'Ashley (vrouw)' },
-      { voiceId: 'Dennis', label: 'Dennis (man)' },
-      { voiceId: 'Alex',   label: 'Alex (man)'   },
-    ];
-    select.innerHTML = fallback.map(v => `<option value="${v.voiceId}">${v.label}</option>`).join('');
-    select.value = inworldVoiceId;
+    select.innerHTML = '<option value="">Geen stemmen geconfigureerd</option>';
   }
 }
 
