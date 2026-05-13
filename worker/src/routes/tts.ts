@@ -78,7 +78,7 @@ async function synthesize(request: Request, env: Env): Promise<Response> {
     body: JSON.stringify({
       text,
       model_id: MODEL,
-      output_format: 'mp3_44100_128',
+      output_format: 'pcm_24000',   // raw 16-bit PCM — geen MP3-header gaps tussen chunks
       voice_settings: {
         stability: 0.5,
         similarity_boost: 0.75,

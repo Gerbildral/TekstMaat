@@ -932,12 +932,17 @@ function pauseTTS() {
   clearHighlights();
 }
 
-// Decodeer ElevenLabs MP3 base64 → AudioBuffer
-async function decodeAudioChunk(base64) {
+// Decodeer ElevenLabs pcm_24000 (16-bit signed LE) → AudioBuffer
+function decodeAudioChunk(base64) {
   const binary = atob(base64);
   const bytes = new Uint8Array(binary.length);
   for (let i = 0; i < binary.length; i++) bytes[i] = binary.charCodeAt(i);
-  return audioCtx.decodeAudioData(bytes.buffer.slice(0));
+  const samples = bytes.length >> 1;
+  const buffer = audioCtx.createBuffer(1, samples, TTS_SAMPLE_RATE);
+  const data = buffer.getChannelData(0);
+  const view = new DataView(bytes.buffer);
+  for (let i = 0; i < samples; i++) data[i] = view.getInt16(i * 2, true) / 32768;
+  return buffer;
 }
 
 // Zet ElevenLabs karakter-alignment om naar woord-timings
@@ -974,7 +979,7 @@ async function speakCurrentSentence() {
   }
 
   if (!audioCtx || audioCtx.state === 'closed') {
-    audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+    audioCtx = new (window.AudioContext || window.webkitAudioContext)({ sampleRate: TTS_SAMPLE_RATE });
   }
   if (audioCtx.state === 'suspended') await audioCtx.resume();
 
@@ -1040,8 +1045,8 @@ async function speakCurrentSentence() {
         try { chunk = JSON.parse(raw); } catch { continue; }
         if (!chunk.audio_base64) continue;
 
-        // Decodeer MP3 chunk en plan afspelen
-        const audioBuffer = await decodeAudioChunk(chunk.audio_base64);
+        // Decodeer PCM chunk (synchroon, geen gaps) en plan afspelen
+        const audioBuffer = decodeAudioChunk(chunk.audio_base64);
         if (nextAudioTime < audioCtx.currentTime + 0.02) nextAudioTime = audioCtx.currentTime + 0.05;
         const chunkStart = nextAudioTime;
         const source = audioCtx.createBufferSource();
