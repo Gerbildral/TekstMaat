@@ -19,9 +19,6 @@ export interface Env {
   JWT_SECRET: string;
   ENVIRONMENT: string;
   APP_URL: string;
-  // Workers Sites – automatisch aangemaakt door Wrangler via [site] in wrangler.toml
-  __STATIC_CONTENT: KVNamespace;
-  __STATIC_CONTENT_MANIFEST: string;
 }
 
 export interface AuthUser {
@@ -43,9 +40,8 @@ export default {
       return new Response(null, { headers: corsHeaders(env) });
     }
 
-    // Serve frontend voor niet-API routes
     if (!path.startsWith('/api/')) {
-      return serveStaticAsset(request, env);
+      return errorResponse('Route niet gevonden', 404);
     }
 
     try {
