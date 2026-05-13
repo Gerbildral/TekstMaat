@@ -9,6 +9,7 @@ import { handleDocuments } from './routes/documents';
 import { handleSessions } from './routes/sessions';
 import { handleFiles } from './routes/files';
 import { handleSuperadmin } from './routes/superadmin';
+import { handleTTS } from './routes/tts';
 import { corsHeaders, errorResponse } from './utils/responses';
 import { verifyJWT } from './utils/auth';
 
@@ -23,6 +24,7 @@ export interface Env {
   APP_URL: string;
   CDN_URL: string;
   FROM_EMAIL: string;
+  INWORLD_API_KEY: string;
 }
 
 export interface AuthUser {
@@ -75,6 +77,7 @@ export default {
       if (apiPath.startsWith('/users')) return handleUsers(request, env, user, apiPath);
       if (apiPath.startsWith('/documents')) return handleDocuments(request, env, user, apiPath);
       if (apiPath.startsWith('/sessions')) return handleSessions(request, env, user, apiPath);
+      if (apiPath.startsWith('/tts')) return handleTTS(request, env, user, apiPath);
       if (apiPath.startsWith('/groups')) return handleGroups(request, env, user, apiPath);
       if (apiPath.startsWith('/files')) return handleFiles(request, env, user, apiPath);
       if (apiPath.startsWith('/ocr')) return handleOCR(request, env, user, apiPath);

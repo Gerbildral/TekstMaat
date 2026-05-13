@@ -516,17 +516,22 @@ let zoomLevel = 1.4;
 let pageTexts = []; // [{page, text, words:[{word,x,y,w,h}]}]
 
 // TTS staat
-let synth = window.speechSynthesis;
-let utterance = null;
 let isPlaying = false;
 let currentSpeed = 1.0;
 let currentLang = 'nl';
-let availableVoices = [];
-let selectedVoice = null;
-let sentences = [];      // Array van zinnen met pagina info
+let sentences = [];
 let currentSentenceIdx = 0;
 let totalCharCount = 0;
 let processedChars = 0;
+
+// Inworld AudioContext staat
+let audioCtx = null;
+let ttsController = null;
+let scheduledSources = [];
+let wordTimers = [];
+let nextAudioTime = 0;
+let inworldVoiceId = 'Ashley';
+const TTS_SAMPLE_RATE = 24000;
 
 // PDF.js worker
 pdfjsLib.GlobalWorkerOptions.workerSrc =
@@ -566,9 +571,8 @@ async function init() {
     if (e.code === 'ArrowLeft') prevPage();
   });
 
-  // Stemmen laden
-  loadVoices();
-  synth.addEventListener('voiceschanged', loadVoices);
+  // Inworld stemmen laden
+  loadInworldVoices();
 
   await loadSessions();
 }
@@ -795,6 +799,22 @@ async function rerender() {
 // ============================================================
 //  TEKST LADEN VOOR TTS (client-side via PDF.js)
 // ============================================================
+function splitSentences(text) {
+  if (!text || text.length < 3) return [];
+
+  // Bescherm afkortingen zodat de punt niet als zinseinde wordt gezien
+  const abbrevRe = /\b(dhr|mevr|mw|dr|prof|mr|ir|ing|drs|jr|sr|bijv|enz|etc|ca|resp|fig|afd|blz|nr|art|gem|prov|jan|feb|mrt|apr|jun|jul|aug|sep|okt|nov|dec|vs|pp|par)\./gi;
+  let s = text
+    .replace(abbrevRe, m => m.slice(0, -1) + '\x00')
+    .replace(/\b([A-Z])\./g, '$1\x00')   // initialen: J. Smit
+    .replace(/(\d)\.(\d)/g, '$1\x00$2'); // decimalen: 3.14
+
+  // Splits op zinseinde gevolgd door spatie + hoofdletter
+  const parts = s.split(/(?<=[.!?])\s+(?=[A-ZÁÉÍÓÚÜÀ-ž])/);
+  const result = parts.map(p => p.replace(/\x00/g, '.').trim()).filter(p => p.length > 2);
+  return result.length > 0 ? result : [text];
+}
+
 async function loadTextFromPDF() {
   if (!pdfDoc) return;
 
@@ -845,10 +865,13 @@ async function loadTextFromPDF() {
       if (item.hasEOL) fullText += '\n';
     }
 
-    const cleanText = fullText.replace(/\s+/g, ' ').trim();
+    const cleanText = fullText
+      .replace(/(\w)-\s+(\w)/g, '$1$2')  // fix woordafbrekingen aan regeleindes
+      .replace(/\s+/g, ' ')
+      .trim();
     pageTexts.push({ page: pageNum, text: cleanText, words: wordPositions });
 
-    const sents = cleanText.match(/[^.!?]+[.!?]+/g) || (cleanText.length > 2 ? [cleanText] : []);
+    const sents = splitSentences(cleanText);
     for (const sent of sents) {
       const trimmed = sent.trim();
       if (trimmed.length > 2) {
@@ -890,15 +913,32 @@ function startTTS() {
 
 function pauseTTS() {
   isPlaying = false;
-  synth.cancel();
+  ttsController?.abort();
+  ttsController = null;
+  wordTimers.forEach(clearTimeout);
+  wordTimers = [];
+  scheduledSources.forEach(s => { try { s.stop(0); } catch (_) {} });
+  scheduledSources = [];
   document.getElementById('playBtn').textContent = '▶';
   clearHighlights();
 }
 
-function speakCurrentSentence() {
+// Decodeer Inworld LINEAR16 base64 → AudioBuffer
+function pcmBase64ToAudioBuffer(base64) {
+  const binary = atob(base64);
+  const bytes = new Uint8Array(binary.length);
+  for (let i = 0; i < binary.length; i++) bytes[i] = binary.charCodeAt(i);
+  const samples = bytes.length >> 1;
+  const buffer = audioCtx.createBuffer(1, samples, TTS_SAMPLE_RATE);
+  const data = buffer.getChannelData(0);
+  const view = new DataView(bytes.buffer);
+  for (let i = 0; i < samples; i++) data[i] = view.getInt16(i * 2, true) / 32768;
+  return buffer;
+}
+
+async function speakCurrentSentence() {
   if (!isPlaying || currentSentenceIdx >= sentences.length) {
     if (currentSentenceIdx >= sentences.length) {
-      // Klaar!
       isPlaying = false;
       document.getElementById('playBtn').textContent = '▶';
       currentSentenceIdx = 0;
@@ -907,92 +947,185 @@ function speakCurrentSentence() {
     return;
   }
 
-  synth.cancel();
-  const sent = sentences[currentSentenceIdx];
+  // AudioContext vereist een gebruikersgebaar — wordt bij eerste play aangemaakt
+  if (!audioCtx || audioCtx.state === 'closed') {
+    audioCtx = new (window.AudioContext || window.webkitAudioContext)({ sampleRate: TTS_SAMPLE_RATE });
+  }
+  if (audioCtx.state === 'suspended') await audioCtx.resume();
 
-  utterance = new SpeechSynthesisUtterance(sent.text);
-  utterance.rate = currentSpeed;
-  utterance.lang = getLangCode(currentLang);
+  // Groepeer zinnen van dezelfde pagina (max ~600 tekens) in één API-aanroep
+  const startIdx = currentSentenceIdx;
+  const startPage = sentences[startIdx].page;
+  let chunkText = '';
+  const boundaries = [];
 
-  if (selectedVoice) {
-    utterance.voice = selectedVoice;
+  for (let i = startIdx; i < sentences.length; i++) {
+    const s = sentences[i];
+    if (s.page !== startPage && boundaries.length > 0) break;
+    if (chunkText.length > 600 && boundaries.length > 0) break;
+    boundaries.push({ idx: i, localStart: chunkText.length });
+    chunkText += (chunkText ? ' ' : '') + s.text;
   }
 
-  // Scroll naar de juiste pagina
-  if (sent.page !== currentPage) {
-    scrollToPage(sent.page);
-  }
+  const lastBound = boundaries[boundaries.length - 1];
 
-  // Word-level highlighting via boundary events
-  utterance.addEventListener('boundary', (event) => {
-    if (event.name === 'word') {
-      highlightWord(sent, event.charIndex, event.charLength);
-      updateTTSProgress(sent.charStart + event.charIndex);
+  const firstSent = sentences[startIdx];
+  if (firstSent.page !== currentPage) scrollToPage(firstSent.page);
+
+  ttsController?.abort();
+  ttsController = new AbortController();
+  nextAudioTime = audioCtx.currentTime + 0.05;
+
+  try {
+    const res = await fetch(`${API}/api/tts`, {
+      method: 'POST',
+      headers: { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json' },
+      body: JSON.stringify({ text: chunkText, voiceId: inworldVoiceId, speakingRate: Math.min(currentSpeed, 1.5) }),
+      signal: ttsController.signal,
+    });
+
+    if (!res.ok) throw new Error(`TTS ${res.status}`);
+
+    const reader = res.body.getReader();
+    const decoder = new TextDecoder();
+    let buffer = '';
+    let searchPos = 0; // positie in chunkText voor woordmatching
+
+    while (true) {
+      const { done, value } = await reader.read();
+      if (done) break;
+
+      buffer += decoder.decode(value, { stream: true });
+      const lines = buffer.split('\n');
+      buffer = lines.pop() ?? '';
+
+      for (const line of lines) {
+        if (!line.trim()) continue;
+        let chunk;
+        try { chunk = JSON.parse(line); } catch { continue; }
+
+        const result = chunk.result;
+        if (!result?.audioContent) continue;
+
+        // Decodeer PCM en plan afspelen
+        const audioBuffer = pcmBase64ToAudioBuffer(result.audioContent);
+        if (nextAudioTime < audioCtx.currentTime + 0.02) {
+          nextAudioTime = audioCtx.currentTime + 0.05;
+        }
+        const chunkStart = nextAudioTime;
+        const source = audioCtx.createBufferSource();
+        source.buffer = audioBuffer;
+        source.connect(audioCtx.destination);
+        source.start(chunkStart);
+        nextAudioTime += audioBuffer.duration;
+        scheduledSources.push(source);
+
+        // Plan word-highlights op basis van Inworld timestamps
+        const wa = result.timestampInfo?.wordAlignment;
+        if (wa?.words?.length) {
+          for (let wi = 0; wi < wa.words.length; wi++) {
+            const rawWord = wa.words[wi];
+            const cleanWord = rawWord.replace(/\W/g, '');
+            if (!cleanWord) continue;
+
+            const idx = chunkText.toLowerCase().indexOf(cleanWord.toLowerCase(), searchPos);
+            if (idx < 0) continue;
+            searchPos = idx + cleanWord.length;
+
+            let activeBound = boundaries[0];
+            for (const b of boundaries) {
+              if (b.localStart <= idx) activeBound = b;
+              else break;
+            }
+            const sentIdx = activeBound.idx;
+            const localChar = idx - activeBound.localStart;
+            const wordLen = cleanWord.length;
+            const delay = Math.max(0, (chunkStart + wa.wordStartTimeSeconds[wi] - audioCtx.currentTime) * 1000);
+
+            wordTimers.push(setTimeout(() => {
+              if (!isPlaying) return;
+              currentSentenceIdx = sentIdx;
+              const sent = sentences[sentIdx];
+              if (sent?.page !== currentPage) scrollToPage(sent.page);
+              highlightWord(sent, localChar, wordLen);
+              updateTTSProgress(sent.charStart + localChar);
+            }, delay));
+          }
+        }
+      }
     }
-  });
+  } catch (e) {
+    if (e?.name !== 'AbortError') {
+      console.error('TTS fout:', e);
+      toast('Voorlezen tijdelijk niet beschikbaar', 'warning');
+      isPlaying = false;
+      document.getElementById('playBtn').textContent = '▶';
+    }
+    return;
+  }
 
-  utterance.addEventListener('end', () => {
-    if (isPlaying) {
-      currentSentenceIdx++;
-      processedChars = sent.charStart + sent.text.length;
+  // Wacht tot geplande audio klaar is, ga dan naar volgende chunk
+  if (isPlaying) {
+    const remaining = Math.max(0, (nextAudioTime - audioCtx.currentTime) * 1000);
+    setTimeout(() => {
+      if (!isPlaying) return;
+      currentSentenceIdx = lastBound.idx + 1;
+      const lastSent = sentences[lastBound.idx];
+      processedChars = lastSent.charStart + lastSent.text.length;
       speakCurrentSentence();
-    }
-  });
+    }, remaining);
+  }
+}
 
-  utterance.addEventListener('error', (e) => {
-    if (e.error !== 'interrupted') {
-      console.error('TTS fout:', e.error);
-    }
-  });
-
-  synth.speak(utterance);
+function cancelAndRestart() {
+  ttsController?.abort();
+  wordTimers.forEach(clearTimeout);
+  wordTimers = [];
+  scheduledSources.forEach(s => { try { s.stop(0); } catch (_) {} });
+  scheduledSources = [];
+  clearHighlights();
 }
 
 function skipSentence() {
-  synth.cancel();
+  cancelAndRestart();
   currentSentenceIdx = Math.min(currentSentenceIdx + 1, sentences.length - 1);
   if (isPlaying) speakCurrentSentence();
 }
 
 function rewindSentence() {
-  synth.cancel();
+  cancelAndRestart();
   currentSentenceIdx = Math.max(currentSentenceIdx - 1, 0);
   if (isPlaying) speakCurrentSentence();
 }
 
 function changeSpeed(delta) {
+  // Inworld speakingRate max is 1.5; browser UI loopt tot 2.0 maar we begrenzen zacht
   currentSpeed = Math.max(0.5, Math.min(2.0, currentSpeed + delta));
-  const display = currentSpeed === 1.0 ? '1×' : currentSpeed.toFixed(2).replace('.00', '') + '×';
+  const clamped = Math.min(currentSpeed, 1.5);
+  const display = currentSpeed.toFixed(2).replace(/\.?0+$/, '') + '×';
   document.getElementById('speedDisplay').textContent = display;
 
-  if (utterance) utterance.rate = currentSpeed;
-
-  // Herstart met nieuwe snelheid
   if (isPlaying) {
-    synth.cancel();
-    setTimeout(speakCurrentSentence, 50);
+    cancelAndRestart();
+    speakCurrentSentence();
   }
 
   api(`/sessions/${currentSession?.id}/log`, {
     method: 'POST',
-    body: JSON.stringify({ action: 'changed_speed', metadata: { speed: currentSpeed } })
+    body: JSON.stringify({ action: 'changed_speed', metadata: { speed: clamped } })
   });
 }
 
 function changeLang(lang) {
+  // Inworld detecteert taal automatisch — currentLang bijhouden voor UI
   currentLang = lang;
-  loadVoicesForLang(lang);
-  if (isPlaying) {
-    synth.cancel();
-    setTimeout(speakCurrentSentence, 50);
-  }
 }
 
-function changeVoice(voiceName) {
-  selectedVoice = availableVoices.find(v => v.name === voiceName) || null;
+function changeVoice(voiceId) {
+  inworldVoiceId = voiceId || 'Ashley';
   if (isPlaying) {
-    synth.cancel();
-    setTimeout(speakCurrentSentence, 50);
+    cancelAndRestart();
+    speakCurrentSentence();
   }
 }
 
@@ -1086,35 +1219,40 @@ function seekToPosition(event) {
   processedChars = sentences[targetIdx]?.charStart || 0;
 
   if (isPlaying) {
-    synth.cancel();
-    setTimeout(speakCurrentSentence, 50);
+    cancelAndRestart();
+    speakCurrentSentence();
   }
 
   updateTTSProgress(targetChar);
 }
 
 // ============================================================
-//  STEMMEN
+//  STEMMEN (Inworld)
 // ============================================================
-function loadVoices() {
-  availableVoices = synth.getVoices();
-  loadVoicesForLang(currentLang);
-}
-
-function loadVoicesForLang(lang) {
-  const code = getLangCode(lang);
-  const filtered = availableVoices.filter(v => v.lang.startsWith(code.split('-')[0]));
+async function loadInworldVoices() {
   const select = document.getElementById('voiceSelect');
+  try {
+    const voices = await api('/tts/voices');
+    if (!Array.isArray(voices) || voices.length === 0) throw new Error('geen stemmen');
 
-  select.innerHTML = '<option value="">Standaard stem</option>' +
-    filtered.map(v => `<option value="${v.name}">${v.name}</option>`).join('');
+    select.innerHTML = voices
+      .map(v => `<option value="${v.voiceId}">${v.displayName || v.voiceId}</option>`)
+      .join('');
 
-  selectedVoice = null;
-}
-
-function getLangCode(lang) {
-  const map = { nl: 'nl-NL', en: 'en-US', de: 'de-DE', fr: 'fr-FR', es: 'es-ES' };
-  return map[lang] || 'nl-NL';
+    // Selecteer standaardstem
+    const preferred = voices.find(v => v.voiceId === inworldVoiceId) || voices[0];
+    inworldVoiceId = preferred.voiceId;
+    select.value = inworldVoiceId;
+  } catch {
+    // Fallback: vaste kleine lijst zodat de selector niet leeg is
+    const fallback = [
+      { voiceId: 'Ashley', label: 'Ashley (vrouw)' },
+      { voiceId: 'Dennis', label: 'Dennis (man)' },
+      { voiceId: 'Alex',   label: 'Alex (man)'   },
+    ];
+    select.innerHTML = fallback.map(v => `<option value="${v.voiceId}">${v.label}</option>`).join('');
+    select.value = inworldVoiceId;
+  }
 }
 
 // ============================================================
