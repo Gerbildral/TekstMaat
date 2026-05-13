@@ -355,7 +355,7 @@
       setLoading(true);
 
       try {
-        const API_URL = window.location.origin;
+        const API_URL = 'https://api.mijnleeshulp.nl';
         const res = await fetch(`${API_URL}/api/auth/login`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
@@ -394,7 +394,7 @@
       const email = prompt('Voer je e-mailadres in voor een reset link:');
       if (!email) return;
 
-      fetch(window.location.origin + '/api/auth/reset-password', {
+      fetch('https://api.mijnleeshulp.nl/api/auth/reset-password', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ email })
