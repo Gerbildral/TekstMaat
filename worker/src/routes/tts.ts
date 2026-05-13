@@ -13,7 +13,7 @@ import { errorResponse, corsHeaders } from '../utils/responses';
 const EL_BASE = 'https://api.elevenlabs.io';
 // Streaming endpoint met karakter-level timestamps (character alignment)
 const STREAM_URL = (voiceId: string) =>
-  `${EL_BASE}/v1/text-to-speech/${voiceId}/stream/with-timestamps`;
+  `${EL_BASE}/v1/text-to-speech/${voiceId}/stream/with-timestamps?output_format=pcm_24000`;
 const MODEL = 'eleven_multilingual_v2'; // beste kwaliteit voor NL/EN/FR/DE
 
 export async function handleTTS(
@@ -78,7 +78,6 @@ async function synthesize(request: Request, env: Env): Promise<Response> {
     body: JSON.stringify({
       text,
       model_id: MODEL,
-      output_format: 'pcm_24000',   // raw 16-bit PCM — geen MP3-header gaps tussen chunks
       voice_settings: {
         stability: 0.5,
         similarity_boost: 0.75,
