@@ -822,6 +822,9 @@
    CONFIG & STATE
 ═══════════════════════════════════════════════════════════════ */
 const API = 'https://api.mijnleeshulp.nl/api';
+const NL_TZ = { timeZone: 'Europe/Amsterdam' };
+const NL_DATETIME = { ...NL_TZ, dateStyle: 'short', timeStyle: 'short' };
+const NL_DATE     = { ...NL_TZ, dateStyle: 'short' };
 let token = localStorage.getItem('lb_token');
 let schools = [];
 let currentSection = 'dashboard';
@@ -1091,7 +1094,7 @@ function renderSchoolsList() {
           </div>
           <div>
             <div style="font-size:12px;font-weight:600;color:var(--text-muted);margin-bottom:8px;">LICENTIE</div>
-            <div style="font-size:13px;color:var(--text-secondary);">Verloopt op: <strong>${expiry.toLocaleDateString('nl-NL')}</strong></div>
+            <div style="font-size:13px;color:var(--text-secondary);">Verloopt op: <strong>${expiry.toLocaleString('nl-NL', NL_DATE)}</strong></div>
             <button class="btn btn-ghost btn-sm" style="margin-top:8px;" onclick="openLicenseModalFor('${s.id}')">Licentie aanpassen</button>
           </div>
           <div>
@@ -1222,7 +1225,7 @@ function renderLicenseTable() {
       <td>${s.plan || '–'}</td>
       <td>${s.students || 0}</td>
       <td>${s.storage_limit_gb || 0} GB</td>
-      <td>${expiry.toLocaleDateString('nl-NL')}</td>
+      <td>${expiry.toLocaleString('nl-NL', NL_DATE)}</td>
       <td><span class="license-badge ${cls}">${label}</span></td>
       <td><button class="btn btn-ghost btn-sm" onclick="openLicenseModalFor('${s.id}')">✏️ Bewerken</button></td>
     </tr>`;
@@ -1327,7 +1330,7 @@ async function renderLoginLogs() {
 
     tbody.innerHTML = rows.map(r => `
       <tr>
-        <td style="white-space:nowrap;font-size:12px;">${new Date(r.created_at).toLocaleString('nl-NL')}</td>
+        <td style="white-space:nowrap;font-size:12px;">${new Date(r.created_at).toLocaleString('nl-NL', NL_DATETIME)}</td>
         <td>${escHtml(r.school_name || '–')}</td>
         <td>
           <div style="font-size:13px;">${escHtml(r.user_name || '–')}</div>
@@ -1397,7 +1400,7 @@ function formatTime(iso) {
   if (diff < 60) return 'zojuist';
   if (diff < 3600) return `${Math.floor(diff/60)} min geleden`;
   if (diff < 86400) return `${Math.floor(diff/3600)} uur geleden`;
-  return d.toLocaleDateString('nl-NL');
+  return d.toLocaleString('nl-NL', NL_DATE);
 }
 
 function escHtml(s) {
