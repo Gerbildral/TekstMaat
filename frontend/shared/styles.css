@@ -309,17 +309,21 @@ tbody tr:hover { background: var(--surface-2); }
 .toggle input:checked + .toggle-slider::before { transform: translateX(20px); }
 
 /* Modal */
-.modal-overlay {
+.modal-overlay,
+.modal-backdrop {
   position: fixed;
   inset: 0;
   background: rgba(9,21,41,0.6);
   backdrop-filter: blur(4px);
-  display: flex;
+  display: none;
   align-items: center;
   justify-content: center;
   z-index: 1000;
   padding: 20px;
-  opacity: 0;
+}
+.modal-overlay.open,
+.modal-backdrop.open {
+  display: flex;
   animation: fadeIn 200ms forwards;
 }
 .modal {
@@ -331,10 +335,15 @@ tbody tr:hover { background: var(--surface-2); }
   box-shadow: var(--shadow-lg);
   transform: scale(0.96);
   animation: scaleIn 200ms forwards;
+  max-height: 90vh;
+  overflow-y: auto;
 }
 .modal-header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 24px; }
 .modal-title { font-size: 1.25rem; font-weight: 600; }
+.modal-close { background: none; border: none; cursor: pointer; font-size: 1.25rem; color: var(--text-muted); padding: 4px; line-height: 1; }
+.modal-close:hover { color: var(--text-primary); }
 .modal-footer { display: flex; gap: 12px; justify-content: flex-end; margin-top: 28px; }
+.modal-body { display: flex; flex-direction: column; gap: 14px; }
 
 @keyframes fadeIn { to { opacity: 1; } }
 @keyframes scaleIn { to { transform: scale(1); } }

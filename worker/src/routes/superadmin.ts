@@ -26,6 +26,11 @@ export async function handleSuperadmin(request: Request, env: Env, path: string)
     return await getHealth(env);
   }
 
+  // GET /superadmin/schools/by-brim/:brim_code
+  if (method === 'GET' && segments[1] === 'schools' && segments[2] === 'by-brim' && segments[3]) {
+    return await getSchoolByBrim(segments[3], env);
+  }
+
   // GET /superadmin/login-attempts
   if (method === 'GET' && segments[1] === 'login-attempts') {
     return await getLoginAttempts(request, env);
@@ -143,7 +148,7 @@ async function listSchools(env: Env): Promise<Response> {
   const result = await env.DB.prepare(`
     SELECT
       s.id, s.name,
-      COALESCE(s.code, s.slug) as code,
+      s.brim_code,
       s.contact_name as contact,
       s.contact_email as email,
       s.license_type as plan,
@@ -179,11 +184,11 @@ async function createSchool(body: any, env: Env): Promise<Response> {
     : getLicenseExpiry();
 
   await env.DB.prepare(`
-    INSERT INTO schools (id, name, slug, code, contact_name, contact_email, license_type, storage_limit_gb, max_students, license_expires_at, is_active)
+    INSERT INTO schools (id, name, slug, brim_code, contact_name, contact_email, license_type, storage_limit_gb, max_students, license_expires_at, is_active)
     VALUES (?, ?, ?, ?, ?, ?, 'standard', ?, ?, ?, 1)
   `).bind(
     id, body.name.trim(), slug,
-    body.code?.trim() || null,
+    body.brim_code?.trim().toUpperCase() || null,
     body.contact_name?.trim() || null,
     body.contact_email?.trim() || null,
     body.storage_limit_gb || 10,
@@ -211,10 +216,10 @@ async function createSchool(body: any, env: Env): Promise<Response> {
 async function updateSchool(id: string, body: any, env: Env): Promise<Response> {
   await env.DB.prepare(`
     UPDATE schools
-    SET name=?, code=?, contact_name=?, contact_email=?, storage_limit_gb=?, max_students=?, updated_at=CURRENT_TIMESTAMP
+    SET name=?, brim_code=?, contact_name=?, contact_email=?, storage_limit_gb=?, max_students=?, updated_at=CURRENT_TIMESTAMP
     WHERE id=?
   `).bind(
-    body.name, body.code || null, body.contact_name || null, body.contact_email || null,
+    body.name, body.brim_code?.trim().toUpperCase() || null, body.contact_name || null, body.contact_email || null,
     body.storage_limit_gb || 10, body.max_students || 100, id
   ).run();
   return successResponse({}, 'School bijgewerkt');
@@ -283,6 +288,21 @@ async function exportSchool(schoolId: string, env: Env): Promise<Response> {
   return new Response(JSON.stringify(data, null, 2), {
     headers: { 'Content-Type': 'application/json', 'Content-Disposition': `attachment; filename="school-export-${schoolId}.json"` }
   });
+}
+
+/* ──────────────────────────────────────────────────────────────
+   School by BRIM code (voor koppelen gebruikers)
+────────────────────────────────────────────────────────────── */
+async function getSchoolByBrim(brimCode: string, env: Env): Promise<Response> {
+  const school = await env.DB.prepare(`
+    SELECT id, name, brim_code, contact_name as contact, contact_email as email,
+           max_students, is_active as active
+    FROM schools
+    WHERE brim_code = ? AND is_active = 1 AND name NOT LIKE '%_deleted_%'
+  `).bind(brimCode.trim().toUpperCase()).first<any>();
+
+  if (!school) return errorResponse('Geen actieve school gevonden met deze BRIM-code', 404);
+  return jsonResponse({ school });
 }
 
 /* ──────────────────────────────────────────────────────────────

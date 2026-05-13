@@ -709,8 +709,8 @@
           <input type="text" class="input" id="schoolName" placeholder="bijv. RSG Enkhuizen" />
         </div>
         <div class="form-group">
-          <label class="label">Afkorting (code)</label>
-          <input type="text" class="input" id="schoolCode" placeholder="bijv. RSG" maxlength="10" />
+          <label class="label">BRIM-code</label>
+          <input type="text" class="input" id="schoolCode" placeholder="bijv. 01AB00" maxlength="8" style="text-transform:uppercase;" />
         </div>
       </div>
       <div class="form-row">
@@ -1058,7 +1058,7 @@ function renderSchoolsList() {
         <div class="school-icon">🏫</div>
         <div>
           <div class="school-name">${escHtml(s.name)}</div>
-          <div class="school-meta">${escHtml(s.contact||'')} · ${escHtml(s.email||'')} · Max: <strong>${s.max_students||100} studenten</strong></div>
+          <div class="school-meta">${escHtml(s.contact||'')} · ${escHtml(s.email||'')} · Max: <strong>${s.max_students||100} studenten</strong>${s.brim_code ? ` · BRIM: <strong>${escHtml(s.brim_code)}</strong>` : ''}</div>
         </div>
         <div class="school-stats">
           <div>
@@ -1133,7 +1133,7 @@ function openSchoolModal(school = null) {
   document.getElementById('saveSchoolBtn').textContent = isEdit ? 'Wijzigingen opslaan' : 'School aanmaken';
   document.getElementById('editSchoolId').value = school?.id || '';
   document.getElementById('schoolName').value = school?.name || '';
-  document.getElementById('schoolCode').value = school?.code || '';
+  document.getElementById('schoolCode').value = school?.brim_code || '';
   document.getElementById('schoolContact').value = school?.contact || '';
   document.getElementById('schoolEmail').value = school?.email || '';
   document.getElementById('schoolMaxStudents').value = school?.max_students || 100;
@@ -1163,7 +1163,7 @@ async function saveSchool() {
   const id = document.getElementById('editSchoolId').value;
   const body = {
     name: document.getElementById('schoolName').value.trim(),
-    code: document.getElementById('schoolCode').value.trim(),
+    brim_code: document.getElementById('schoolCode').value.trim().toUpperCase(),
     contact_name: document.getElementById('schoolContact').value.trim(),
     contact_email: document.getElementById('schoolEmail').value.trim(),
     max_students: parseInt(document.getElementById('schoolMaxStudents').value) || 100,
