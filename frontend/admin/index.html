@@ -598,6 +598,10 @@
         <label class="form-label">Toegang voor groepen</label>
         <div id="sessionGroupSelect" style="display:flex; gap:8px; flex-wrap:wrap;"></div>
       </div>
+      <div class="form-group" style="grid-column:1/-1;">
+        <label class="form-label">Toegang voor losse studenten</label>
+        <div id="sessionStudentSelect" style="display:flex; flex-direction:column; gap:4px; max-height:160px; overflow-y:auto; border:1px solid var(--border); border-radius:8px; padding:8px;"></div>
+      </div>
       <div style="display:flex; align-items:center; justify-content:space-between;">
         <span class="text-sm font-medium">Snelheidsregeling toestaan</span>
         <label class="toggle"><input type="checkbox" id="sessionSpeed" checked><span class="toggle-slider"></span></label>
@@ -663,6 +667,7 @@
   let documents = [];
   let sessions = [];
   let groups = [];
+  let students = [];
   let currentSection = 'dashboard';
   let pendingFile = null;
 
@@ -727,8 +732,9 @@
   async function loadStudents() {
     const data = await api('/users?role=student');
     if (data?.success) {
-      document.getElementById('statStudents').textContent = data.data.length;
-      renderStudents(data.data);
+      students = data.data;
+      document.getElementById('statStudents').textContent = students.length;
+      renderStudents(students);
     }
   }
 
@@ -1004,8 +1010,9 @@
       return;
     }
 
-    // Geselecteerde groepen
+    // Geselecteerde groepen en losse studenten
     const groupIds = [...document.querySelectorAll('[data-group-checkbox]:checked')].map(cb => cb.value);
+    const userIds = [...document.querySelectorAll('[data-student-checkbox]:checked')].map(cb => cb.value);
 
     const data = await api('/sessions', {
       method: 'POST',
@@ -1017,6 +1024,7 @@
         allow_speed_control: document.getElementById('sessionSpeed').checked,
         allow_voice_selection: document.getElementById('sessionVoice').checked,
         group_ids: groupIds,
+        user_ids: userIds,
       }),
     });
 
@@ -1083,6 +1091,14 @@
           ${esc(g.name)} (${g.member_count || 0})
         </label>
       `).join('') || '<span class="text-sm text-muted">Geen groepen beschikbaar</span>';
+
+      // Student checkboxes
+      document.getElementById('sessionStudentSelect').innerHTML = students.map(s => `
+        <label style="display:flex; align-items:center; gap:6px; font-size:0.875rem; cursor:pointer;">
+          <input type="checkbox" data-student-checkbox value="${s.id}">
+          ${esc(s.first_name + ' ' + s.last_name)}
+        </label>
+      `).join('') || '<span class="text-sm text-muted">Geen studenten beschikbaar</span>';
     }
 
     document.getElementById(id).style.display = 'flex';
