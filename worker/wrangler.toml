@@ -28,6 +28,7 @@ APP_URL = "https://mijnleeshulp.foxion-hosting.workers.dev"
 binding = "FILES_BUCKET"
 bucket_name = "mijnleeshulp-files"
 preview_bucket_name = "mijnleeshulp-files-preview"
+jurisdiction = "eu"
  
 # D1 database
 [[d1_databases]]
