@@ -168,16 +168,9 @@ async function uploadDocument(request: Request, env: Env, user: AuthUser): Promi
     await env.DB.prepare(`
       INSERT INTO documents (id, school_id, uploaded_by, title, description,
         original_filename, file_type, file_size, r2_key, language, ocr_status)
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'pending')
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'done')
     `).bind(docId, schoolId, user.id, title, description,
             file.name, fileType, file.size, r2Key, language).run();
-
-    // Start OCR verwerking asynchroon (via Cloudflare AI)
-    // In productie gebruik je een Queue of een DO (Durable Object) hiervoor
-    // Voor nu starten we het direct maar zonder te wachten
-    startOCRProcessing(env, docId, r2Key, fileType, language).catch(err =>
-      console.error('OCR start fout:', err)
-    );
 
     return jsonResponse({
       success: true,
@@ -186,10 +179,10 @@ async function uploadDocument(request: Request, env: Env, user: AuthUser): Promi
         title,
         file_type: fileType,
         file_size: file.size,
-        ocr_status: 'pending',
+        ocr_status: 'done',
         r2_key: r2Key,
       },
-      message: 'Document geüpload. Tekst wordt verwerkt...'
+      message: 'Document succesvol geüpload.'
     }, 201);
 
   } catch (err) {

@@ -600,7 +600,6 @@ async function loadSessions() {
       <div class="session-card-icon">${s.file_type === 'pdf' ? '📕' : '📘'}</div>
       <div class="session-card-title">${esc(s.title)}</div>
       <div class="session-card-meta">${esc(s.document_title || '')}</div>
-      ${s.ocr_status !== 'done' ? '<div style="margin-top:8px;"><span class="badge badge-amber">⏳ Tekst wordt verwerkt...</span></div>' : ''}
       <div class="session-card-until">
         Beschikbaar tot ${formatDate(s.available_until)}
       </div>
@@ -645,10 +644,8 @@ async function openSession(sessionId) {
   // Laad het document bestand
   await loadPDF(sessionId);
 
-  // Laad geëxtraheerde tekst voor TTS
-  if (currentSession.ocr_status === 'done') {
-    await loadExtractedText(sessionId);
-  }
+  // Extraheer tekst uit PDF voor TTS (client-side via PDF.js)
+  await loadTextFromPDF();
 
   // Log actie
   api(`/sessions/${sessionId}/log`, {
@@ -796,24 +793,62 @@ async function rerender() {
 }
 
 // ============================================================
-//  TEKST LADEN VOOR TTS
+//  TEKST LADEN VOOR TTS (client-side via PDF.js)
 // ============================================================
-async function loadExtractedText(sessionId) {
-  const data = await api(`/sessions/${sessionId}/text`);
-  if (!data?.success || !data.data?.length) return;
+async function loadTextFromPDF() {
+  if (!pdfDoc) return;
 
-  pageTexts = data.data;
-
-  // Zet tekst om naar zinnen voor TTS
+  pageTexts = [];
   sentences = [];
   totalCharCount = 0;
 
-  for (const pageData of pageTexts) {
-    const pageNum = pageData.page;
-    const text = pageData.text || '';
+  for (let pageNum = 1; pageNum <= pdfDoc.numPages; pageNum++) {
+    const page = await pdfDoc.getPage(pageNum);
+    const viewport1 = page.getViewport({ scale: 1.0 });
+    const textContent = await page.getTextContent();
 
-    // Splits in zinnen (op punt, vraagteken, uitroepteken)
-    const sents = text.match(/[^.!?]+[.!?]+/g) || [text];
+    let fullText = '';
+    const wordPositions = [];
+
+    for (const item of textContent.items) {
+      if (!item.str) continue;
+
+      const tx = item.transform;
+      const itemX = tx[4];
+      const itemH = Math.abs(tx[3]) || 10;
+      // PDF Y-origin is bottom-left; flip to CSS top-left
+      const itemY = viewport1.height - tx[5] - itemH;
+      const itemW = item.width || 0;
+
+      // Split item text into words and distribute positions proportionally
+      let charOffset = 0;
+      const parts = item.str.split(/(\s+)/);
+      for (const part of parts) {
+        if (!part.trim()) {
+          charOffset += part.length;
+          if (fullText.length && fullText[fullText.length - 1] !== ' ') fullText += ' ';
+          continue;
+        }
+        const startFrac = item.str.length > 0 ? charOffset / item.str.length : 0;
+        const widthFrac = item.str.length > 0 ? part.length / item.str.length : 1;
+        wordPositions.push({
+          word: part,
+          x: itemX + startFrac * itemW,
+          y: itemY,
+          w: Math.max(widthFrac * itemW, itemH * 0.4),
+          h: itemH
+        });
+        fullText += part;
+        charOffset += part.length;
+      }
+
+      if (item.hasEOL) fullText += '\n';
+    }
+
+    const cleanText = fullText.replace(/\s+/g, ' ').trim();
+    pageTexts.push({ page: pageNum, text: cleanText, words: wordPositions });
+
+    const sents = cleanText.match(/[^.!?]+[.!?]+/g) || (cleanText.length > 2 ? [cleanText] : []);
     for (const sent of sents) {
       const trimmed = sent.trim();
       if (trimmed.length > 2) {
