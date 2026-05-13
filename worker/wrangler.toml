@@ -3,8 +3,23 @@ main = "src/index.ts"
 compatibility_date = "2024-01-01"
 compatibility_flags = ["nodejs_compat"]
  
+[observability]
+enabled = false
+head_sampling_rate = 1
+
+[observability.logs]
+enabled = false
+head_sampling_rate = 1
+persist = true
+invocation_logs = true
+
+[observability.traces]
+enabled = true
+persist = true
+head_sampling_rate = 1
+
 [vars]
-ENVIRONMENT = "production"
+ENVIRONMENT = "development"
 JWT_SECRET = "NyCIK3jrrMMXPhBq6ynQ8I9C3B9mBIL7VQz1Mkz0f5lpkjAnpcJdmRQfBgHwjSJHaAu74tgBYDiTWHzWQ5122w=="
 APP_URL = "https://tekstmaat.foxion-hosting.workers.dev"
  
