@@ -825,6 +825,14 @@ const API = 'https://api.mijnleeshulp.nl/api';
 const NL_TZ = { timeZone: 'Europe/Amsterdam' };
 const NL_DATETIME = { ...NL_TZ, dateStyle: 'short', timeStyle: 'short' };
 const NL_DATE     = { ...NL_TZ, dateStyle: 'short' };
+
+// SQLite geeft timestamps zonder 'Z', browsers parsen dat inconsistent.
+// Door 'Z' toe te voegen forceren we UTC-interpretatie.
+function fromUtc(iso) {
+  if (!iso) return new Date(NaN);
+  const s = iso.trim();
+  return new Date(s.includes('T') || s.endsWith('Z') ? s : s.replace(' ', 'T') + 'Z');
+}
 let token = localStorage.getItem('lb_token');
 let schools = [];
 let currentSection = 'dashboard';
@@ -1330,7 +1338,7 @@ async function renderLoginLogs() {
 
     tbody.innerHTML = rows.map(r => `
       <tr>
-        <td style="white-space:nowrap;font-size:12px;">${new Date(r.created_at).toLocaleString('nl-NL', NL_DATETIME)}</td>
+        <td style="white-space:nowrap;font-size:12px;">${fromUtc(r.created_at).toLocaleString('nl-NL', NL_DATETIME)}</td>
         <td>${escHtml(r.school_name || '–')}</td>
         <td>
           <div style="font-size:13px;">${escHtml(r.user_name || '–')}</div>
@@ -1395,7 +1403,7 @@ function showToast(msg, type='info') {
 
 function formatTime(iso) {
   if (!iso) return '';
-  const d = new Date(iso);
+  const d = fromUtc(iso);
   const diff = (Date.now() - d) / 1000;
   if (diff < 60) return 'zojuist';
   if (diff < 3600) return `${Math.floor(diff/60)} min geleden`;
