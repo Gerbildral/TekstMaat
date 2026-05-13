@@ -1,6 +1,6 @@
 {
   "$schema": "node_modules/wrangler/config-schema.json",
-  "name": "tekstmaat-page",
+  "name": "mijnleeshulp-frontend",
   "compatibility_date": "2026-05-12",
   "assets": {
     "directory": "."

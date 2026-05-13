@@ -1,5 +1,5 @@
 /**
- * TEKSTMAAT - Cloudflare Worker API
+ * MIJNLEESHULP - Cloudflare Worker API
  * Hoofdrouter voor alle API verzoeken
  */
 

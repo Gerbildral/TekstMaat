@@ -139,7 +139,7 @@ CREATE INDEX IF NOT EXISTS idx_session_logs_user ON session_logs(user_id);
 INSERT OR IGNORE INTO users (id, email, password_hash, first_name, last_name, role)
 VALUES (
   'superadmin-00000000000000000000000000000001',
-  'admin@tekstmaat.nl',
+  'admin@mijnleeshulp.nl',
   '$2a$10$PLACEHOLDER_HASH_CHANGE_THIS',
   'Super',
   'Admin',
