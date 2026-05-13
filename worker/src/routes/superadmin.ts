@@ -99,8 +99,8 @@ async function getStats(env: Env): Promise<Response> {
     env.DB.prepare(`SELECT COUNT(*) as today FROM exam_sessions WHERE date(available_from)=date('now') AND is_active=1`).first<any>(),
   ]);
 
-  const expiredLicenses = await env.DB.prepare(
-    `SELECT COUNT(*) as cnt FROM schools WHERE license_expires_at < datetime('now') AND is_active=1 AND name NOT LIKE '%_deleted_%'`
+  const inactiveSchools = await env.DB.prepare(
+    `SELECT COUNT(*) as cnt FROM schools WHERE is_active=0 AND name NOT LIKE '%_deleted_%'`
   ).first<any>();
 
   const ocrQueue = await env.DB.prepare(
@@ -134,7 +134,7 @@ async function getStats(env: Env): Promise<Response> {
     documents_ocr: docs?.ocr_done ?? 0,
     storage_gb: 0,
     sessions_today: sessions?.today ?? 0,
-    licenses_expired: expiredLicenses?.cnt ?? 0,
+    schools_inactive: inactiveSchools?.cnt ?? 0,
     ocr_queue: ocrQueue?.cnt ?? 0,
     sessions_per_day: sessionsPerDay.results,
     recent_activity: recentActivity.results,
@@ -179,13 +179,10 @@ async function createSchool(body: any, env: Env): Promise<Response> {
   const slug = body.name.trim().toLowerCase()
     .replace(/[^a-z0-9\s-]/g, '').replace(/\s+/g, '-').replace(/-+/g, '-')
     + '-' + Date.now().toString(36);
-  const licenseExpiry = body.license_expires
-    ? new Date(body.license_expires).toISOString()
-    : getLicenseExpiry();
 
   await env.DB.prepare(`
-    INSERT INTO schools (id, name, slug, brim_code, contact_name, contact_email, license_type, storage_limit_gb, max_students, license_expires_at, is_active)
-    VALUES (?, ?, ?, ?, ?, ?, 'standard', ?, ?, ?, 1)
+    INSERT INTO schools (id, name, slug, brim_code, contact_name, contact_email, license_type, storage_limit_gb, max_students, is_active)
+    VALUES (?, ?, ?, ?, ?, ?, 'standard', ?, ?, 1)
   `).bind(
     id, body.name.trim(), slug,
     body.brim_code?.trim().toUpperCase() || null,
@@ -193,7 +190,6 @@ async function createSchool(body: any, env: Env): Promise<Response> {
     body.contact_email?.trim() || null,
     body.storage_limit_gb || 10,
     body.max_students || 100,
-    licenseExpiry,
   ).run();
 
   if (body.admin_email && body.admin_password) {
@@ -246,8 +242,8 @@ async function toggleActive(id: string, active: boolean, env: Env): Promise<Resp
 ────────────────────────────────────────────────────────────── */
 async function updateLicense(id: string, body: any, env: Env): Promise<Response> {
   await env.DB.prepare(`
-    UPDATE schools SET max_students=?, storage_limit_gb=?, license_expires_at=?, updated_at=CURRENT_TIMESTAMP WHERE id=?
-  `).bind(body.max_students, body.storage_limit_gb, body.license_expires, id).run();
+    UPDATE schools SET max_students=?, storage_limit_gb=?, updated_at=CURRENT_TIMESTAMP WHERE id=?
+  `).bind(body.max_students, body.storage_limit_gb, id).run();
   return successResponse({}, 'Licentie bijgewerkt');
 }
 
@@ -395,11 +391,3 @@ async function getHealth(env: Env): Promise<Response> {
   return jsonResponse({ components });
 }
 
-/* ──────────────────────────────────────────────────────────────
-   Helpers
-────────────────────────────────────────────────────────────── */
-function getLicenseExpiry(): string {
-  const d = new Date();
-  d.setFullYear(d.getFullYear() + 1);
-  return d.toISOString();
-}

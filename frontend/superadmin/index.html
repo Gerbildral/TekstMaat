@@ -354,9 +354,9 @@
             <div class="stat-icon">📖</div>
           </div>
           <div class="stat-card">
-            <div class="stat-label">Licenties verlopen</div>
+            <div class="stat-label">Scholen uitgeschakeld</div>
             <div class="stat-value" id="statExpired" style="color:var(--error);">–</div>
-            <div class="stat-sub">vereisen aandacht</div>
+            <div class="stat-sub">niet actief</div>
             <div class="stat-icon">⚠️</div>
           </div>
         </div>
@@ -424,10 +424,8 @@
             <thead>
               <tr>
                 <th>School</th>
-                <th>Plan</th>
-                <th>Max studenten</th>
-                <th>Max opslag</th>
-                <th>Geldig t/m</th>
+                <th>Studenten (actief/max)</th>
+                <th>Opslag quota</th>
                 <th>Status</th>
                 <th></th>
               </tr>
@@ -733,13 +731,6 @@
           <input type="number" class="input" id="schoolStorageGb" value="10" min="1" max="500" />
         </div>
       </div>
-      <div class="form-row">
-        <div class="form-group">
-          <label class="label">Licentie geldig t/m</label>
-          <input type="date" class="input" id="schoolLicenseExpiry" />
-        </div>
-      </div>
-
       <div style="border-top:1px solid var(--border);padding-top:14px;">
         <div style="font-size:13px;font-weight:600;color:var(--text-secondary);margin-bottom:10px;">
           Eerste beheerder aanmaken
@@ -792,11 +783,15 @@
           <input type="number" class="input" id="licStorageGb" value="10" min="1" />
         </div>
       </div>
-      <div class="form-row">
-        <div class="form-group">
-          <label class="label">Licentie geldig t/m</label>
-          <input type="date" class="input" id="licExpiry" />
+      <div style="display:flex;align-items:center;justify-content:space-between;padding:10px 0;">
+        <div>
+          <div style="font-size:14px;font-weight:600;color:var(--text-primary);">School actief</div>
+          <div style="font-size:12px;color:var(--text-muted);">Uitschakelen blokkeert toegang voor alle gebruikers</div>
         </div>
+        <label class="toggle-switch">
+          <input type="checkbox" id="licActive" checked />
+          <span class="toggle-slider"></span>
+        </label>
       </div>
     </div>
     <div class="modal-footer">
@@ -937,7 +932,7 @@ async function loadDashboard() {
     const stats = await api('GET', '/superadmin/stats').catch(() => ({
       schools_active: 0, schools_total: 0,
       students_total: 0, documents_total: 0, documents_ocr: 0,
-      storage_gb: 0, sessions_today: 0, licenses_expired: 0,
+      storage_gb: 0, sessions_today: 0, schools_inactive: 0,
     }));
 
     document.getElementById('statSchools').textContent = stats.schools_active ?? '–';
@@ -947,7 +942,7 @@ async function loadDashboard() {
     document.getElementById('statDocsOcr').textContent = stats.documents_ocr ?? '–';
     document.getElementById('statStorage').textContent = stats.storage_gb ? stats.storage_gb.toFixed(1) : '–';
     document.getElementById('statSessions').textContent = stats.sessions_today ?? '–';
-    document.getElementById('statExpired').textContent = stats.licenses_expired ?? '–';
+    document.getElementById('statExpired').textContent = stats.schools_inactive ?? '–';
     document.getElementById('ocrQueue').textContent = stats.ocr_queue ?? '–';
 
     renderSessionsChart(stats.sessions_per_day || []);
@@ -1043,13 +1038,8 @@ function renderSchoolsList() {
   }
 
   container.innerHTML = filtered.map(s => {
-    const expiry = new Date(s.license_expires);
-    const now = new Date();
-    const diffDays = Math.ceil((expiry - now) / 86400000);
-    const licClass = !s.active || diffDays < 0 ? 'license-expired' :
-                     diffDays < 30 ? 'license-trial' : 'license-active';
-    const licLabel = !s.active || diffDays < 0 ? '🔴 Verlopen' :
-                     diffDays < 30 ? `⚠️ Verloopt over ${diffDays} dagen` : '✅ Actief';
+    const licClass = s.active ? 'license-active' : 'license-expired';
+    const licLabel = s.active ? '✅ Actief' : '🔴 Uitgeschakeld';
     const storPct = s.storage_limit_gb ? Math.round((s.storage_mb||0) / (s.storage_limit_gb*1024) * 100) : 0;
 
     return `
@@ -1093,9 +1083,10 @@ function renderSchoolsList() {
             <div style="font-size:12px;color:var(--text-muted);margin-top:4px;">${s.storage_mb ? (s.storage_mb/1024).toFixed(2) : '0'} GB van ${s.storage_limit_gb||0} GB</div>
           </div>
           <div>
-            <div style="font-size:12px;font-weight:600;color:var(--text-muted);margin-bottom:8px;">LICENTIE</div>
-            <div style="font-size:13px;color:var(--text-secondary);">Verloopt op: <strong>${expiry.toLocaleString('nl-NL', NL_DATE)}</strong></div>
-            <button class="btn btn-ghost btn-sm" style="margin-top:8px;" onclick="openLicenseModalFor('${s.id}')">Licentie aanpassen</button>
+            <div style="font-size:12px;font-weight:600;color:var(--text-muted);margin-bottom:8px;">QUOTA</div>
+            <div style="font-size:13px;color:var(--text-secondary);">Max: <strong>${s.max_students||100} studenten</strong></div>
+            <div style="font-size:13px;color:var(--text-secondary);">Opslag: <strong>${s.storage_limit_gb||10} GB</strong></div>
+            <button class="btn btn-ghost btn-sm" style="margin-top:8px;" onclick="openLicenseModalFor('${s.id}')">Quota aanpassen</button>
           </div>
           <div>
             <div style="font-size:12px;font-weight:600;color:var(--text-muted);margin-bottom:8px;">SNELLE ACTIES</div>
@@ -1138,10 +1129,6 @@ function openSchoolModal(school = null) {
   document.getElementById('schoolEmail').value = school?.email || '';
   document.getElementById('schoolMaxStudents').value = school?.max_students || 100;
   document.getElementById('schoolStorageGb').value = school?.storage_limit_gb || 10;
-  const defaultExpiry = new Date(); defaultExpiry.setFullYear(defaultExpiry.getFullYear() + 1);
-  document.getElementById('schoolLicenseExpiry').value = school?.license_expires
-    ? school.license_expires.split('T')[0]
-    : defaultExpiry.toISOString().split('T')[0];
   document.getElementById('adminName').value = '';
   document.getElementById('adminEmail').value = '';
   document.getElementById('adminPassword').value = '';
@@ -1168,7 +1155,6 @@ async function saveSchool() {
     contact_email: document.getElementById('schoolEmail').value.trim(),
     max_students: parseInt(document.getElementById('schoolMaxStudents').value) || 100,
     storage_limit_gb: parseInt(document.getElementById('schoolStorageGb').value) || 10,
-    license_expires: document.getElementById('schoolLicenseExpiry').value,
     admin_name: document.getElementById('adminName').value.trim(),
     admin_email: document.getElementById('adminEmail').value.trim(),
     admin_password: document.getElementById('adminPassword').value,
@@ -1223,20 +1209,16 @@ function exportSchoolData(schoolId) {
 function renderLicenseTable() {
   const tbody = document.getElementById('licenseTable');
   tbody.innerHTML = schools.map(s => {
-    const expiry = new Date(s.license_expires);
-    const diffDays = Math.ceil((expiry - new Date()) / 86400000);
-    const cls = diffDays < 0 ? 'license-expired' : diffDays < 30 ? 'license-trial' : 'license-active';
-    const label = diffDays < 0 ? 'Verlopen' : diffDays < 30 ? `Verloopt binnenkort` : 'Actief';
+    const cls = s.active ? 'license-active' : 'license-expired';
+    const label = s.active ? 'Actief' : 'Uitgeschakeld';
     return `<tr>
       <td><strong>${escHtml(s.name)}</strong></td>
-      <td>${s.plan || '–'}</td>
-      <td>${s.students || 0}</td>
+      <td>${s.students || 0} / ${s.max_students || '–'}</td>
       <td>${s.storage_limit_gb || 0} GB</td>
-      <td>${expiry.toLocaleString('nl-NL', NL_DATE)}</td>
       <td><span class="license-badge ${cls}">${label}</span></td>
       <td><button class="btn btn-ghost btn-sm" onclick="openLicenseModalFor('${s.id}')">✏️ Bewerken</button></td>
     </tr>`;
-  }).join('') || `<tr><td colspan="7" style="text-align:center;color:var(--text-muted);">Geen scholen gevonden.</td></tr>`;
+  }).join('') || `<tr><td colspan="5" style="text-align:center;color:var(--text-muted);">Geen scholen gevonden.</td></tr>`;
 }
 
 function openLicenseModal() { openModal('licenseModal'); }
@@ -1244,25 +1226,22 @@ function openLicenseModalFor(id) {
   const s = schools.find(x => x.id === id);
   if (s) {
     document.getElementById('licSchool').innerHTML = `<option value="${s.id}">${escHtml(s.name)}</option>`;
-    document.getElementById('licPlan').value = s.plan || 'basic';
     document.getElementById('licMaxStudents').value = s.max_students || 100;
     document.getElementById('licStorageGb').value = s.storage_limit_gb || 10;
-    if (s.license_expires) {
-      document.getElementById('licExpiry').value = s.license_expires.slice(0,10);
-    }
+    document.getElementById('licActive').checked = !!s.active;
   }
   openModal('licenseModal');
 }
 
 async function saveLicense() {
   const schoolId = document.getElementById('licSchool').value;
-  const body = {
-    max_students: parseInt(document.getElementById('licMaxStudents').value),
-    storage_limit_gb: parseInt(document.getElementById('licStorageGb').value),
-    license_expires: document.getElementById('licExpiry').value,
-  };
+  const active = document.getElementById('licActive').checked;
   try {
-    await api('PATCH', `/superadmin/schools/${schoolId}/license`, body);
+    await api('PATCH', `/superadmin/schools/${schoolId}/license`, {
+      max_students: parseInt(document.getElementById('licMaxStudents').value),
+      storage_limit_gb: parseInt(document.getElementById('licStorageGb').value),
+    });
+    await api('PATCH', `/superadmin/schools/${schoolId}/active`, { active });
     showToast('Licentie bijgewerkt.', 'success');
     closeModal('licenseModal');
     await loadSchools();
