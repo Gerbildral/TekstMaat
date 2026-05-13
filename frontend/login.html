@@ -213,6 +213,17 @@
       font-size: 0.8125rem;
       color: var(--text-muted);
     }
+
+    .success-box {
+      display: none;
+      padding: 12px 14px;
+      background: var(--success-bg, #f0fdf4);
+      border: 1px solid var(--success, #16a34a);
+      border-radius: var(--radius);
+      color: var(--success, #16a34a);
+      font-size: 0.9375rem;
+    }
+    .success-box.show { display: flex; align-items: center; gap: 8px; }
   </style>
 </head>
 <body>
@@ -252,6 +263,55 @@
         </div>
         <div class="login-subtitle">Schoolportaal voor ondersteund lezen</div>
       </div>
+
+      <!-- Wachtwoord reset formulier (zichtbaar via ?reset=TOKEN) -->
+      <form class="login-form" id="resetForm" novalidate style="display:none;">
+        <div>
+          <h2>Nieuw wachtwoord</h2>
+          <p class="text-muted text-sm">Kies een nieuw wachtwoord voor je account</p>
+        </div>
+
+        <div id="resetErrorBox" class="error-box" role="alert">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/>
+          </svg>
+          <span id="resetErrorText"></span>
+        </div>
+
+        <div id="resetSuccessBox" class="success-box" role="status">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/>
+          </svg>
+          <span>Wachtwoord succesvol gewijzigd! Je wordt doorgestuurd naar de loginpagina.</span>
+        </div>
+
+        <div class="form-row">
+          <label class="form-label required" for="newPassword">Nieuw wachtwoord</label>
+          <div class="password-wrapper">
+            <input class="form-input" type="password" id="newPassword" name="newPassword"
+                   autocomplete="new-password" placeholder="Minimaal 8 tekens" required>
+            <button type="button" class="password-toggle" onclick="toggleNewPassword()" aria-label="Wachtwoord tonen/verbergen">
+              👁
+            </button>
+          </div>
+        </div>
+
+        <div class="form-row">
+          <label class="form-label required" for="confirmPassword">Herhaal wachtwoord</label>
+          <div class="password-wrapper">
+            <input class="form-input" type="password" id="confirmPassword" name="confirmPassword"
+                   autocomplete="new-password" placeholder="Zelfde wachtwoord" required>
+            <button type="button" class="password-toggle" onclick="toggleConfirmPassword()" aria-label="Wachtwoord tonen/verbergen">
+              👁
+            </button>
+          </div>
+        </div>
+
+        <button type="submit" class="btn btn-primary login-btn" id="resetBtn">
+          <span id="resetBtnText">Wachtwoord instellen</span>
+          <div id="resetBtnSpinner" class="spinner" style="display:none; width:16px; height:16px; border-width:2px; border-color:rgba(255,255,255,0.3); border-top-color:white;"></div>
+        </button>
+      </form>
 
       <form class="login-form" id="loginForm" novalidate>
         <div>
@@ -312,6 +372,75 @@
     const savedTheme = localStorage.getItem('lb_theme') || 'light';
     document.documentElement.setAttribute('data-theme', savedTheme);
     document.getElementById('themeToggle').checked = savedTheme === 'dark';
+
+    // Controleer of er een reset token in de URL zit
+    const resetToken = new URLSearchParams(window.location.search).get('reset');
+    if (resetToken) {
+      document.getElementById('loginForm').style.display = 'none';
+      document.getElementById('resetForm').style.display = '';
+    }
+
+    function toggleNewPassword() {
+      const input = document.getElementById('newPassword');
+      input.type = input.type === 'password' ? 'text' : 'password';
+    }
+
+    function toggleConfirmPassword() {
+      const input = document.getElementById('confirmPassword');
+      input.type = input.type === 'password' ? 'text' : 'password';
+    }
+
+    document.getElementById('resetForm').addEventListener('submit', async (e) => {
+      e.preventDefault();
+      document.getElementById('resetErrorBox').classList.remove('show');
+      document.getElementById('resetSuccessBox').classList.remove('show');
+
+      const password = document.getElementById('newPassword').value;
+      const confirm = document.getElementById('confirmPassword').value;
+
+      if (password.length < 8) {
+        document.getElementById('resetErrorText').textContent = 'Wachtwoord moet minimaal 8 tekens zijn.';
+        document.getElementById('resetErrorBox').classList.add('show');
+        return;
+      }
+      if (password !== confirm) {
+        document.getElementById('resetErrorText').textContent = 'Wachtwoorden komen niet overeen.';
+        document.getElementById('resetErrorBox').classList.add('show');
+        return;
+      }
+
+      document.getElementById('resetBtnText').textContent = 'Bezig...';
+      document.getElementById('resetBtnSpinner').style.display = 'block';
+      document.getElementById('resetBtn').disabled = true;
+
+      try {
+        const res = await fetch('https://api.mijnleeshulp.nl/api/auth/set-password', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ token: resetToken, password })
+        });
+
+        const data = await res.json();
+
+        if (!res.ok || !data.success) {
+          document.getElementById('resetErrorText').textContent = data.message || 'Reset mislukt. De link is mogelijk verlopen.';
+          document.getElementById('resetErrorBox').classList.add('show');
+          return;
+        }
+
+        document.getElementById('resetSuccessBox').classList.add('show');
+        document.getElementById('resetBtn').style.display = 'none';
+        setTimeout(() => { window.location.href = '/login.html'; }, 2500);
+
+      } catch {
+        document.getElementById('resetErrorText').textContent = 'Verbindingsfout. Controleer je internetverbinding.';
+        document.getElementById('resetErrorBox').classList.add('show');
+      } finally {
+        document.getElementById('resetBtnText').textContent = 'Wachtwoord instellen';
+        document.getElementById('resetBtnSpinner').style.display = 'none';
+        document.getElementById('resetBtn').disabled = false;
+      }
+    });
 
     function toggleTheme(isDark) {
       const theme = isDark ? 'dark' : 'light';
@@ -403,10 +532,10 @@
       });
     }
 
-    // Auto-redirect als al ingelogd
+    // Auto-redirect als al ingelogd (niet als we een reset token hebben)
     const token = localStorage.getItem('lb_token');
     const user = JSON.parse(localStorage.getItem('lb_user') || 'null');
-    if (token && user) {
+    if (token && user && !resetToken) {
       const role = user.role;
       if (role === 'superadmin') window.location.href = '/superadmin/';
       else if (role === 'schooladmin') window.location.href = '/admin/';
