@@ -279,7 +279,7 @@ async function reprocessDocument(request: Request, env: Env, user: AuthUser, doc
 }
 
 function generateR2SignedUrl(env: Env, r2Key: string): string {
-  return `${env.CDN_URL}/${r2Key}`;
+  return `/api/files/${r2Key}`;
 }
 
 // Start OCR verwerking via Cloudflare AI (asynchroon)

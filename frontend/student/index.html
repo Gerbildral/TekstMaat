@@ -661,10 +661,13 @@ async function loadPDF(sessionId) {
   const docData = await api(`/documents/${currentSession.document_id}`);
   if (!docData?.success) { toast('Document niet laden', 'error'); return; }
 
-  const fileUrl = docData.data.file_url;
+  const fileUrl = `${API}${docData.data.file_url}`;
 
   try {
-    const loadingTask = pdfjsLib.getDocument({ url: fileUrl });
+    const loadingTask = pdfjsLib.getDocument({
+      url: fileUrl,
+      httpHeaders: { 'Authorization': `Bearer ${token}` },
+    });
 
     pdfDoc = await loadingTask.promise;
     totalPageCount = pdfDoc.numPages;
