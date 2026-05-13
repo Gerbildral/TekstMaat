@@ -725,17 +725,18 @@
       </div>
       <div class="form-row">
         <div class="form-group">
-          <label class="label">Plan / licentie</label>
-          <select class="input" id="schoolPlan">
-            <option value="trial">Proefperiode (30 dagen)</option>
-            <option value="basic">Basic (tot 100 studenten)</option>
-            <option value="standard">Standaard (tot 500 studenten)</option>
-            <option value="enterprise">Enterprise (onbeperkt)</option>
-          </select>
+          <label class="label">Max. studenten</label>
+          <input type="number" class="input" id="schoolMaxStudents" value="100" min="1" max="99999" />
         </div>
         <div class="form-group">
           <label class="label">Opslag quota (GB)</label>
           <input type="number" class="input" id="schoolStorageGb" value="10" min="1" max="500" />
+        </div>
+      </div>
+      <div class="form-row">
+        <div class="form-group">
+          <label class="label">Licentie geldig t/m</label>
+          <input type="date" class="input" id="schoolLicenseExpiry" />
         </div>
       </div>
 
@@ -764,7 +765,7 @@
     </div>
     <div class="modal-footer">
       <button class="btn btn-ghost" onclick="closeModal('schoolModal')">Annuleren</button>
-      <button class="btn btn-primary" onclick="saveSchool()">School aanmaken</button>
+      <button class="btn btn-primary" id="saveSchoolBtn" onclick="saveSchool()">School aanmaken</button>
     </div>
   </div>
 </div>
@@ -783,26 +784,17 @@
       </div>
       <div class="form-row">
         <div class="form-group">
-          <label class="label">Plan</label>
-          <select class="input" id="licPlan">
-            <option value="trial">Proefperiode</option>
-            <option value="basic">Basic</option>
-            <option value="standard">Standaard</option>
-            <option value="enterprise">Enterprise</option>
-          </select>
+          <label class="label">Max. studenten</label>
+          <input type="number" class="input" id="licMaxStudents" value="100" min="1" />
         </div>
         <div class="form-group">
-          <label class="label">Max studenten</label>
-          <input type="number" class="input" id="licMaxStudents" value="100" />
+          <label class="label">Max opslag (GB)</label>
+          <input type="number" class="input" id="licStorageGb" value="10" min="1" />
         </div>
       </div>
       <div class="form-row">
         <div class="form-group">
-          <label class="label">Max opslag (GB)</label>
-          <input type="number" class="input" id="licStorageGb" value="10" />
-        </div>
-        <div class="form-group">
-          <label class="label">Vervaldatum</label>
+          <label class="label">Licentie geldig t/m</label>
           <input type="date" class="input" id="licExpiry" />
         </div>
       </div>
@@ -1066,7 +1058,7 @@ function renderSchoolsList() {
         <div class="school-icon">🏫</div>
         <div>
           <div class="school-name">${escHtml(s.name)}</div>
-          <div class="school-meta">${escHtml(s.contact||'')} · ${escHtml(s.email||'')} · Plan: <strong>${s.plan||'–'}</strong></div>
+          <div class="school-meta">${escHtml(s.contact||'')} · ${escHtml(s.email||'')} · Max: <strong>${s.max_students||100} studenten</strong></div>
         </div>
         <div class="school-stats">
           <div>
@@ -1136,14 +1128,20 @@ function toggleSchoolDetail(id) {
    SCHOOL MODAL
 ═══════════════════════════════════════════════════════════════ */
 function openSchoolModal(school = null) {
-  document.getElementById('schoolModalTitle').textContent = school ? 'School bewerken' : 'School toevoegen';
+  const isEdit = !!school;
+  document.getElementById('schoolModalTitle').textContent = isEdit ? 'School bewerken' : 'School toevoegen';
+  document.getElementById('saveSchoolBtn').textContent = isEdit ? 'Wijzigingen opslaan' : 'School aanmaken';
   document.getElementById('editSchoolId').value = school?.id || '';
   document.getElementById('schoolName').value = school?.name || '';
   document.getElementById('schoolCode').value = school?.code || '';
   document.getElementById('schoolContact').value = school?.contact || '';
   document.getElementById('schoolEmail').value = school?.email || '';
-  document.getElementById('schoolPlan').value = school?.plan || 'basic';
+  document.getElementById('schoolMaxStudents').value = school?.max_students || 100;
   document.getElementById('schoolStorageGb').value = school?.storage_limit_gb || 10;
+  const defaultExpiry = new Date(); defaultExpiry.setFullYear(defaultExpiry.getFullYear() + 1);
+  document.getElementById('schoolLicenseExpiry').value = school?.license_expires
+    ? school.license_expires.split('T')[0]
+    : defaultExpiry.toISOString().split('T')[0];
   document.getElementById('adminName').value = '';
   document.getElementById('adminEmail').value = '';
   document.getElementById('adminPassword').value = '';
@@ -1168,8 +1166,9 @@ async function saveSchool() {
     code: document.getElementById('schoolCode').value.trim(),
     contact_name: document.getElementById('schoolContact').value.trim(),
     contact_email: document.getElementById('schoolEmail').value.trim(),
-    plan: document.getElementById('schoolPlan').value,
-    storage_limit_gb: parseInt(document.getElementById('schoolStorageGb').value),
+    max_students: parseInt(document.getElementById('schoolMaxStudents').value) || 100,
+    storage_limit_gb: parseInt(document.getElementById('schoolStorageGb').value) || 10,
+    license_expires: document.getElementById('schoolLicenseExpiry').value,
     admin_name: document.getElementById('adminName').value.trim(),
     admin_email: document.getElementById('adminEmail').value.trim(),
     admin_password: document.getElementById('adminPassword').value,
@@ -1258,7 +1257,6 @@ function openLicenseModalFor(id) {
 async function saveLicense() {
   const schoolId = document.getElementById('licSchool').value;
   const body = {
-    plan: document.getElementById('licPlan').value,
     max_students: parseInt(document.getElementById('licMaxStudents').value),
     storage_limit_gb: parseInt(document.getElementById('licStorageGb').value),
     license_expires: document.getElementById('licExpiry').value,

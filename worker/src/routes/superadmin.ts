@@ -2,7 +2,7 @@
 
 import type { Env } from '../index';
 import { jsonResponse, errorResponse, successResponse } from '../utils/responses';
-import { verifyJWT, createJWT } from '../utils/auth';
+import { verifyJWT, createJWT, hashPassword } from '../utils/auth';
 
 export async function handleSuperadmin(request: Request, env: Env, path: string): Promise<Response> {
   const token = request.headers.get('Authorization')?.replace('Bearer ', '');
@@ -88,32 +88,32 @@ export async function handleSuperadmin(request: Request, env: Env, path: string)
 ────────────────────────────────────────────────────────────── */
 async function getStats(env: Env): Promise<Response> {
   const [schools, students, docs, sessions] = await Promise.all([
-    env.DB.prepare('SELECT COUNT(*) as total, SUM(CASE WHEN active=1 THEN 1 ELSE 0 END) as active FROM schools').first<any>(),
-    env.DB.prepare('SELECT COUNT(*) as total FROM users WHERE role=\'student\'').first<any>(),
-    env.DB.prepare('SELECT COUNT(*) as total, SUM(CASE WHEN ocr_status=\'done\' THEN 1 ELSE 0 END) as ocr_done FROM documents').first<any>(),
-    env.DB.prepare(`SELECT COUNT(*) as today FROM exam_sessions WHERE date(start_time)=date('now')`).first<any>(),
+    env.DB.prepare(`SELECT COUNT(*) as total, SUM(CASE WHEN is_active=1 THEN 1 ELSE 0 END) as active FROM schools WHERE name NOT LIKE '%_deleted_%'`).first<any>(),
+    env.DB.prepare(`SELECT COUNT(*) as total FROM users WHERE role='student' AND is_active=1`).first<any>(),
+    env.DB.prepare(`SELECT COUNT(*) as total, SUM(CASE WHEN ocr_status='done' THEN 1 ELSE 0 END) as ocr_done FROM documents WHERE is_active=1`).first<any>(),
+    env.DB.prepare(`SELECT COUNT(*) as today FROM exam_sessions WHERE date(available_from)=date('now') AND is_active=1`).first<any>(),
   ]);
 
   const expiredLicenses = await env.DB.prepare(
-    `SELECT COUNT(*) as cnt FROM schools WHERE license_expires < datetime('now') AND active=1`
+    `SELECT COUNT(*) as cnt FROM schools WHERE license_expires_at < datetime('now') AND is_active=1 AND name NOT LIKE '%_deleted_%'`
   ).first<any>();
 
   const ocrQueue = await env.DB.prepare(
     `SELECT COUNT(*) as cnt FROM documents WHERE ocr_status IN ('pending','processing')`
   ).first<any>();
 
-  // Sessions per day (last 14 days)
   const sessionsPerDay = await env.DB.prepare(`
-    SELECT date(start_time) as date, COUNT(*) as count
+    SELECT date(available_from) as date, COUNT(*) as count
     FROM exam_sessions
-    WHERE start_time >= datetime('now', '-14 days')
-    GROUP BY date(start_time)
+    WHERE available_from >= datetime('now', '-14 days')
+    GROUP BY date(available_from)
     ORDER BY date ASC
   `).all();
 
-  // Recent activity
   const recentActivity = await env.DB.prepare(`
-    SELECT sl.action, sl.created_at, u.name as user_name, s.name as school
+    SELECT sl.action, sl.created_at,
+           u.first_name || ' ' || u.last_name as user_name,
+           s.name as school
     FROM session_logs sl
     JOIN users u ON sl.user_id = u.id
     JOIN schools s ON u.school_id = s.id
@@ -127,7 +127,7 @@ async function getStats(env: Env): Promise<Response> {
     students_total: students?.total ?? 0,
     documents_total: docs?.total ?? 0,
     documents_ocr: docs?.ocr_done ?? 0,
-    storage_gb: 0, // Would compute from R2 listing in production
+    storage_gb: 0,
     sessions_today: sessions?.today ?? 0,
     licenses_expired: expiredLicenses?.cnt ?? 0,
     ocr_queue: ocrQueue?.cnt ?? 0,
@@ -142,13 +142,22 @@ async function getStats(env: Env): Promise<Response> {
 async function listSchools(env: Env): Promise<Response> {
   const result = await env.DB.prepare(`
     SELECT
-      s.id, s.name, s.code, s.contact_name as contact, s.contact_email as email,
-      s.plan, s.storage_limit_gb, s.max_students, s.license_expires, s.active,
-      COUNT(DISTINCT u.id) FILTER (WHERE u.role='student') as students,
-      COUNT(DISTINCT d.id) as documents
+      s.id, s.name,
+      COALESCE(s.code, s.slug) as code,
+      s.contact_name as contact,
+      s.contact_email as email,
+      s.license_type as plan,
+      COALESCE(s.storage_limit_gb, 10) as storage_limit_gb,
+      s.max_students,
+      s.license_expires_at as license_expires,
+      s.is_active as active,
+      s.created_at,
+      COUNT(DISTINCT CASE WHEN u.role='student' AND u.is_active=1 THEN u.id END) as students,
+      COUNT(DISTINCT CASE WHEN d.is_active=1 THEN d.id END) as documents
     FROM schools s
     LEFT JOIN users u ON u.school_id = s.id
     LEFT JOIN documents d ON d.school_id = s.id
+    WHERE s.name NOT LIKE '%_deleted_%'
     GROUP BY s.id
     ORDER BY s.name ASC
   `).all();
@@ -162,30 +171,35 @@ async function createSchool(body: any, env: Env): Promise<Response> {
   if (!body.name?.trim()) return errorResponse('Schoolnaam is verplicht');
 
   const id = crypto.randomUUID();
+  const slug = body.name.trim().toLowerCase()
+    .replace(/[^a-z0-9\s-]/g, '').replace(/\s+/g, '-').replace(/-+/g, '-')
+    + '-' + Date.now().toString(36);
+  const licenseExpiry = body.license_expires
+    ? new Date(body.license_expires).toISOString()
+    : getLicenseExpiry();
+
   await env.DB.prepare(`
-    INSERT INTO schools (id, name, code, contact_name, contact_email, plan, storage_limit_gb, max_students, license_expires, active)
-    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 1)
+    INSERT INTO schools (id, name, slug, code, contact_name, contact_email, license_type, storage_limit_gb, max_students, license_expires_at, is_active)
+    VALUES (?, ?, ?, ?, ?, ?, 'standard', ?, ?, ?, 1)
   `).bind(
-    id,
-    body.name.trim(),
+    id, body.name.trim(), slug,
     body.code?.trim() || null,
     body.contact_name?.trim() || null,
     body.contact_email?.trim() || null,
-    body.plan || 'basic',
     body.storage_limit_gb || 10,
-    body.max_students || (body.plan === 'enterprise' ? 9999 : body.plan === 'standard' ? 500 : 100),
-    getLicenseExpiry(body.plan),
+    body.max_students || 100,
+    licenseExpiry,
   ).run();
 
-  // Create first admin if provided
   if (body.admin_email && body.admin_password) {
-    const { hashPassword } = await import('../utils/auth') as any;
+    const nameParts = (body.admin_name?.trim() || '').split(' ');
+    const firstName = nameParts[0] || 'Beheerder';
+    const lastName = nameParts.slice(1).join(' ') || '';
     const hashed = await hashPassword(body.admin_password);
-    const adminId = crypto.randomUUID();
     await env.DB.prepare(`
-      INSERT INTO users (id, school_id, email, password_hash, name, role, active)
-      VALUES (?, ?, ?, ?, ?, 'schooladmin', 1)
-    `).bind(adminId, id, body.admin_email.trim(), hashed, body.admin_name?.trim() || body.admin_email).run();
+      INSERT INTO users (id, school_id, email, password_hash, first_name, last_name, role, is_active)
+      VALUES (?, ?, ?, ?, ?, ?, 'schooladmin', 1)
+    `).bind(crypto.randomUUID(), id, body.admin_email.trim(), hashed, firstName, lastName).run();
   }
 
   return jsonResponse({ success: true, data: { id }, message: 'School aangemaakt' }, 201);
@@ -197,11 +211,11 @@ async function createSchool(body: any, env: Env): Promise<Response> {
 async function updateSchool(id: string, body: any, env: Env): Promise<Response> {
   await env.DB.prepare(`
     UPDATE schools
-    SET name=?, code=?, contact_name=?, contact_email=?, plan=?, storage_limit_gb=?, max_students=?, updated_at=CURRENT_TIMESTAMP
+    SET name=?, code=?, contact_name=?, contact_email=?, storage_limit_gb=?, max_students=?, updated_at=CURRENT_TIMESTAMP
     WHERE id=?
   `).bind(
-    body.name, body.code, body.contact_name, body.contact_email,
-    body.plan, body.storage_limit_gb, body.max_students, id
+    body.name, body.code || null, body.contact_name || null, body.contact_email || null,
+    body.storage_limit_gb || 10, body.max_students || 100, id
   ).run();
   return successResponse({}, 'School bijgewerkt');
 }
@@ -210,8 +224,7 @@ async function updateSchool(id: string, body: any, env: Env): Promise<Response> 
    Delete school
 ────────────────────────────────────────────────────────────── */
 async function deleteSchool(id: string, env: Env): Promise<Response> {
-  // Soft delete: deactivate and mark deleted
-  await env.DB.prepare(`UPDATE schools SET active=0, name=name||'_deleted_'||strftime('%s','now') WHERE id=?`).bind(id).run();
+  await env.DB.prepare(`UPDATE schools SET is_active=0, name=name||'_deleted_'||strftime('%s','now') WHERE id=?`).bind(id).run();
   return successResponse({}, 'School verwijderd');
 }
 
@@ -219,7 +232,7 @@ async function deleteSchool(id: string, env: Env): Promise<Response> {
    Toggle active
 ────────────────────────────────────────────────────────────── */
 async function toggleActive(id: string, active: boolean, env: Env): Promise<Response> {
-  await env.DB.prepare(`UPDATE schools SET active=?, updated_at=CURRENT_TIMESTAMP WHERE id=?`).bind(active ? 1 : 0, id).run();
+  await env.DB.prepare(`UPDATE schools SET is_active=?, updated_at=CURRENT_TIMESTAMP WHERE id=?`).bind(active ? 1 : 0, id).run();
   return successResponse({}, active ? 'School geactiveerd' : 'School uitgeschakeld');
 }
 
@@ -228,8 +241,8 @@ async function toggleActive(id: string, active: boolean, env: Env): Promise<Resp
 ────────────────────────────────────────────────────────────── */
 async function updateLicense(id: string, body: any, env: Env): Promise<Response> {
   await env.DB.prepare(`
-    UPDATE schools SET plan=?, max_students=?, storage_limit_gb=?, license_expires=?, updated_at=CURRENT_TIMESTAMP WHERE id=?
-  `).bind(body.plan, body.max_students, body.storage_limit_gb, body.license_expires, id).run();
+    UPDATE schools SET max_students=?, storage_limit_gb=?, license_expires_at=?, updated_at=CURRENT_TIMESTAMP WHERE id=?
+  `).bind(body.max_students, body.storage_limit_gb, body.license_expires, id).run();
   return successResponse({}, 'Licentie bijgewerkt');
 }
 
@@ -238,11 +251,11 @@ async function updateLicense(id: string, body: any, env: Env): Promise<Response>
 ────────────────────────────────────────────────────────────── */
 async function impersonateSchoolAdmin(schoolId: string, env: Env): Promise<Response> {
   const admin = await env.DB.prepare(
-    `SELECT id, name, email, role FROM users WHERE school_id=? AND role='schooladmin' AND active=1 LIMIT 1`
+    `SELECT id, first_name, last_name, email, role FROM users WHERE school_id=? AND role='schooladmin' AND is_active=1 LIMIT 1`
   ).bind(schoolId).first<any>();
   if (!admin) return errorResponse('Geen actieve admin gevonden voor deze school');
 
-  const token = await createJWT({ ...admin, school_id: schoolId, first_name: admin.name, last_name: '' }, env.JWT_SECRET, 1); // 1 hour
+  const token = await createJWT({ ...admin, school_id: schoolId }, env.JWT_SECRET, 1);
   return jsonResponse({ token });
 }
 
@@ -262,8 +275,8 @@ async function retryOcr(schoolId: string, env: Env): Promise<Response> {
 async function exportSchool(schoolId: string, env: Env): Promise<Response> {
   const [school, users, docs, sessions] = await Promise.all([
     env.DB.prepare('SELECT * FROM schools WHERE id=?').bind(schoolId).first(),
-    env.DB.prepare('SELECT id, name, email, role, active FROM users WHERE school_id=?').bind(schoolId).all(),
-    env.DB.prepare('SELECT id, name, mime_type, ocr_status, created_at FROM documents WHERE school_id=?').bind(schoolId).all(),
+    env.DB.prepare('SELECT id, first_name, last_name, email, role, is_active FROM users WHERE school_id=?').bind(schoolId).all(),
+    env.DB.prepare('SELECT id, title, file_type, ocr_status, created_at FROM documents WHERE school_id=?').bind(schoolId).all(),
     env.DB.prepare('SELECT * FROM exam_sessions WHERE school_id=?').bind(schoolId).all(),
   ]);
   const data = { school, users: users.results, documents: docs.results, sessions: sessions.results, exported_at: new Date().toISOString() };
@@ -365,11 +378,8 @@ async function getHealth(env: Env): Promise<Response> {
 /* ──────────────────────────────────────────────────────────────
    Helpers
 ────────────────────────────────────────────────────────────── */
-function getLicenseExpiry(plan: string): string {
+function getLicenseExpiry(): string {
   const d = new Date();
-  if (plan === 'trial') d.setDate(d.getDate() + 30);
-  else if (plan === 'basic') d.setFullYear(d.getFullYear() + 1);
-  else if (plan === 'standard') d.setFullYear(d.getFullYear() + 1);
-  else d.setFullYear(d.getFullYear() + 3); // enterprise
+  d.setFullYear(d.getFullYear() + 1);
   return d.toISOString();
 }
