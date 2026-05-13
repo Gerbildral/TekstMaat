@@ -148,7 +148,7 @@
       overflow: hidden;
       transition: box-shadow 0.15s;
     }
-    .school-card:hover { box-shadow: 0 4px 16px var(--shadow); }
+    .school-card:hover { box-shadow: var(--shadow-lg); }
 
     .school-card-header {
       padding: 16px 20px;
@@ -355,7 +355,7 @@
           </div>
           <div class="stat-card">
             <div class="stat-label">Licenties verlopen</div>
-            <div class="stat-value" id="statExpired" style="color:var(--danger);">–</div>
+            <div class="stat-value" id="statExpired" style="color:var(--error);">–</div>
             <div class="stat-sub">vereisen aandacht</div>
             <div class="stat-icon">⚠️</div>
           </div>
@@ -537,7 +537,7 @@
         <div style="display:grid;grid-template-columns:1fr 1fr;gap:20px;">
           <div class="card">
             <div class="card-header"><div class="card-title">Algemeen</div></div>
-            <div class="card-body" style="display:flex;flex-direction:column;gap:14px;">
+            <div class="card-body">
               <div class="form-group">
                 <label class="label">Platformnaam</label>
                 <input type="text" class="input" value="MijnLeesHulp" />
@@ -563,7 +563,7 @@
 
           <div class="card">
             <div class="card-header"><div class="card-title">OCR & AI</div></div>
-            <div class="card-body" style="display:flex;flex-direction:column;gap:14px;">
+            <div class="card-body">
               <div class="form-group">
                 <label class="label">OCR model</label>
                 <select class="input">
@@ -590,7 +590,7 @@
 
           <div class="card">
             <div class="card-header"><div class="card-title">Beveiliging</div></div>
-            <div class="card-body" style="display:flex;flex-direction:column;gap:14px;">
+            <div class="card-body">
               <div class="form-group">
                 <label class="label">JWT geldigheid (uren)</label>
                 <input type="number" class="input" value="8" />
@@ -609,7 +609,7 @@
 
           <div class="card">
             <div class="card-header"><div class="card-title">Superadmin wachtwoord</div></div>
-            <div class="card-body" style="display:flex;flex-direction:column;gap:14px;">
+            <div class="card-body">
               <div class="form-group">
                 <label class="label">Huidig wachtwoord</label>
                 <input type="password" class="input" placeholder="••••••••" />
@@ -701,7 +701,7 @@
       <div class="modal-title" id="schoolModalTitle">School toevoegen</div>
       <button class="modal-close" onclick="closeModal('schoolModal')">✕</button>
     </div>
-    <div class="modal-body" style="display:flex;flex-direction:column;gap:14px;">
+    <div class="modal-body">
       <input type="hidden" id="editSchoolId" />
       <div class="form-row">
         <div class="form-group">
@@ -777,7 +777,7 @@
       <div class="modal-title">Licentie bewerken</div>
       <button class="modal-close" onclick="closeModal('licenseModal')">✕</button>
     </div>
-    <div class="modal-body" style="display:flex;flex-direction:column;gap:14px;">
+    <div class="modal-body">
       <div class="form-group">
         <label class="label">School</label>
         <select class="input" id="licSchool"></select>
