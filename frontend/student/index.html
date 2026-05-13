@@ -532,7 +532,7 @@ let ttsController = null;
 let scheduledSources = [];
 let wordTimers = [];
 let nextAudioTime = 0;
-let inworldVoiceId = 'Ashley';
+let ttsVoiceId = '';
 const TTS_SAMPLE_RATE = 24000;
 
 // PDF.js worker
@@ -1015,7 +1015,7 @@ async function speakCurrentSentence() {
       headers: { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json' },
       body: JSON.stringify({
         text: chunkText,
-        voiceId: inworldVoiceId,
+        voiceId: ttsVoiceId,
         speed: Math.max(0.7, Math.min(1.2, currentSpeed)),
       }),
       signal: ttsController.signal,
@@ -1153,7 +1153,7 @@ function changeLang(lang) {
 }
 
 function changeVoice(voiceId) {
-  inworldVoiceId = voiceId || 'Ashley';
+  ttsVoiceId = voiceId || ttsVoiceId;
   if (isPlaying) {
     cancelAndRestart();
     speakCurrentSentence();
@@ -1297,8 +1297,8 @@ async function loadInworldVoices() {
     if (!Array.isArray(voices) || voices.length === 0) throw new Error('geen stemmen');
     select.innerHTML = voices.map(v => `<option value="${v.id}">${v.name}</option>`).join('');
     // Selecteer eerste stem als standaard
-    inworldVoiceId = voices[0].id;
-    select.value = inworldVoiceId;
+    ttsVoiceId = voices[0].id;
+    select.value = ttsVoiceId;
   } catch {
     select.innerHTML = '<option value="">Geen stemmen geconfigureerd</option>';
   }

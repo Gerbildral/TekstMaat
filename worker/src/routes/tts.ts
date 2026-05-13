@@ -66,7 +66,8 @@ async function synthesize(request: Request, env: Env): Promise<Response> {
 
   // ElevenLabs speed range: ~0.7–1.2 (waarden buiten dit bereik klinken vervormd)
   const speed = Math.max(0.7, Math.min(1.2, body.speed ?? 1.0));
-  const voiceId = body.voiceId || 'cgSgspJ2msm6clMCkdW9'; // Rachel (EL default)
+  const voiceId = body.voiceId;
+  if (!voiceId) return errorResponse('Geen stem geselecteerd', 400, env);
 
   const elRes = await fetch(STREAM_URL(voiceId), {
     method: 'POST',
