@@ -5,7 +5,7 @@
 
 import type { Env, AuthUser } from '../index';
 import { requireSchoolAccess } from '../utils/auth';
-import { errorResponse } from '../utils/responses';
+import { errorResponse, corsHeaders } from '../utils/responses';
 
 export async function handleFiles(
   request: Request,
@@ -71,6 +71,12 @@ export async function handleFiles(
   object.writeHttpMetadata(headers);
   headers.set('Cache-Control', 'private, max-age=3600');
   headers.set('ETag', object.httpEtag);
+
+  // CORS headers voor cross-origin toegang vanuit de browser
+  const cors = corsHeaders(env);
+  for (const [key, value] of Object.entries(cors)) {
+    headers.set(key, value as string);
+  }
 
   // Range support voor PDF streaming
   const rangeHeader = request.headers.get('Range');

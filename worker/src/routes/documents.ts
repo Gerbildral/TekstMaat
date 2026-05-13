@@ -278,12 +278,8 @@ async function reprocessDocument(request: Request, env: Env, user: AuthUser, doc
   return successResponse(null, 'Herverwerking gestart');
 }
 
-// Genereer tijdelijke URL voor R2 bestand (2 uur geldig)
-async function generateR2SignedUrl(env: Env, r2Key: string): Promise<string> {
-  // R2 signed URLs via R2 binding
-  // In productie gebruik je env.FILES_BUCKET.createMultipartUpload of een custom signing mechanisme
-  // Voor nu: directe publieke URL (zorg dat bucket public is of gebruik Workers URL)
-  return `/api/files/${encodeURIComponent(r2Key)}`;
+function generateR2SignedUrl(env: Env, r2Key: string): string {
+  return `${env.CDN_URL}/${r2Key}`;
 }
 
 // Start OCR verwerking via Cloudflare AI (asynchroon)

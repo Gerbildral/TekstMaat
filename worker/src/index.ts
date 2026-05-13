@@ -21,6 +21,7 @@ export interface Env {
   JWT_SECRET: string;
   ENVIRONMENT: string;
   APP_URL: string;
+  CDN_URL: string;
   FROM_EMAIL: string;
 }
 
