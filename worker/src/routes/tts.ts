@@ -19,7 +19,7 @@ const MODEL = 'eleven_multilingual_v2'; // beste kwaliteit voor NL/EN/FR/DE
 export async function handleTTS(
   request: Request,
   env: Env,
-  user: AuthUser,
+  _user: AuthUser,
   path: string
 ): Promise<Response> {
   if (!env.ELEVENLABS_API_KEY) {
@@ -91,7 +91,7 @@ async function synthesize(request: Request, env: Env): Promise<Response> {
   if (!elRes.ok) {
     const err = await elRes.text();
     console.error('ElevenLabs TTS fout:', elRes.status, err);
-    return errorResponse('TTS service niet beschikbaar', 502, env);
+    return errorResponse(`TTS fout ${elRes.status}: ${err}`, 502, env);
   }
 
   // SSE stream direct doorsturen — Worker buffert niets

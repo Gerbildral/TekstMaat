@@ -3,6 +3,9 @@ main = "src/index.ts"
 compatibility_date = "2025-01-01"
 compatibility_flags = ["nodejs_compat"]
  
+[placement]
+mode = "smart"
+
 [observability]
 enabled = false
 head_sampling_rate = 1
@@ -43,10 +46,6 @@ database_id = "b3b17c11-c0d4-4c13-936a-7db6746e2500"
 binding = "SESSIONS"
 id = "9be5f1e6ab3c46fa8144616a25a191ea"
 preview_id = "d4e8ce68f0f64d27be7ea78141ed5a4d"
- 
-# AI binding voor OCR/tekst extractie
-[ai]
-binding = "AI"
 
 # Email sending via Cloudflare Email Routing
 [[send_email]]
