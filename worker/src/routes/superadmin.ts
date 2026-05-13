@@ -26,6 +26,11 @@ export async function handleSuperadmin(request: Request, env: Env, path: string)
     return await getHealth(env);
   }
 
+  // GET /superadmin/login-attempts
+  if (method === 'GET' && segments[1] === 'login-attempts') {
+    return await getLoginAttempts(request, env);
+  }
+
   // GET /superadmin/schools
   if (method === 'GET' && segments[1] === 'schools' && !segments[2]) {
     return await listSchools(env);
@@ -265,6 +270,45 @@ async function exportSchool(schoolId: string, env: Env): Promise<Response> {
   return new Response(JSON.stringify(data, null, 2), {
     headers: { 'Content-Type': 'application/json', 'Content-Disposition': `attachment; filename="school-export-${schoolId}.json"` }
   });
+}
+
+/* ──────────────────────────────────────────────────────────────
+   Login attempts
+────────────────────────────────────────────────────────────── */
+async function getLoginAttempts(request: Request, env: Env): Promise<Response> {
+  const url = new URL(request.url);
+  const school = url.searchParams.get('school') || '';
+  const successFilter = url.searchParams.get('success');
+  const date = url.searchParams.get('date') || '';
+
+  let query = `
+    SELECT la.id, la.email, la.ip_address, la.success, la.created_at,
+           u.first_name || ' ' || u.last_name as user_name,
+           s.id as school_id, s.name as school_name
+    FROM login_attempts la
+    LEFT JOIN users u ON la.email = u.email
+    LEFT JOIN schools s ON u.school_id = s.id
+    WHERE 1=1
+  `;
+  const params: any[] = [];
+
+  if (school) {
+    query += ' AND s.id = ?';
+    params.push(school);
+  }
+  if (successFilter !== null && successFilter !== '') {
+    query += ' AND la.success = ?';
+    params.push(successFilter === '1' || successFilter === 'true' ? 1 : 0);
+  }
+  if (date) {
+    query += ' AND date(la.created_at) = ?';
+    params.push(date);
+  }
+
+  query += ' ORDER BY la.created_at DESC LIMIT 200';
+
+  const result = await env.DB.prepare(query).bind(...params).all();
+  return jsonResponse({ attempts: result.results });
 }
 
 /* ──────────────────────────────────────────────────────────────

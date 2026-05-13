@@ -285,6 +285,9 @@
         <button class="sa-nav-item" data-section="settings">
           <span class="nav-icon">⚙️</span> Instellingen
         </button>
+        <button class="sa-nav-item" data-section="loginlogs">
+          <span class="nav-icon">🔑</span> Login logs
+        </button>
         <button class="sa-nav-item" data-section="logs">
           <span class="nav-icon">📄</span> Audit logs
         </button>
@@ -625,6 +628,37 @@
         </div>
       </section>
 
+      <!-- ─── Login logs ──────────────────────────────────────── -->
+      <section class="page-section" id="section-loginlogs">
+        <div class="section-header">
+          <div class="section-title">Login logs</div>
+          <div style="display:flex;gap:8px;align-items:center;">
+            <select class="input" id="loginFilterSchool" style="width:180px;">
+              <option value="">Alle scholen</option>
+            </select>
+            <select class="input" id="loginFilterStatus" style="width:150px;">
+              <option value="">Alle pogingen</option>
+              <option value="1">Succesvol</option>
+              <option value="0">Mislukt</option>
+            </select>
+            <input type="date" class="input" id="loginFilterDate" style="width:160px;" />
+            <button class="btn btn-secondary" onclick="renderLoginLogs()" style="white-space:nowrap;">
+              Filteren
+            </button>
+          </div>
+        </div>
+        <div class="card">
+          <table class="table">
+            <thead>
+              <tr><th>Tijdstip</th><th>School</th><th>Gebruiker / E-mail</th><th>IP-adres</th><th>Status</th></tr>
+            </thead>
+            <tbody id="loginLogsTable">
+              <tr><td colspan="5" style="text-align:center;color:var(--text-muted);">Laden…</td></tr>
+            </tbody>
+          </table>
+        </div>
+      </section>
+
       <!-- ─── Audit logs ──────────────────────────────────────── -->
       <section class="page-section" id="section-logs">
         <div class="section-header">
@@ -849,6 +883,7 @@ const sectionTitles = {
   activity: 'Activiteiten',
   health: 'Systeemstatus',
   settings: 'Instellingen',
+  loginlogs: 'Login logs',
   logs: 'Audit logs',
 };
 
@@ -869,6 +904,7 @@ function navigateTo(section) {
   if (section === 'licenses') renderLicenseTable();
   if (section === 'storage') renderStorageTable();
   if (section === 'activity') renderActivityTable();
+  if (section === 'loginlogs') renderLoginLogs();
   if (section === 'logs') renderAuditTable();
   if (section === 'health') renderHealth();
 }
@@ -1257,6 +1293,60 @@ function renderActivityTable() {
   tbody.innerHTML = `<tr><td colspan="5" style="text-align:center;color:var(--text-muted);">
     Activiteiten worden geladen via de API.</td></tr>`;
 }
+async function renderLoginLogs() {
+  const tbody = document.getElementById('loginLogsTable');
+  tbody.innerHTML = `<tr><td colspan="5" style="text-align:center;color:var(--text-muted);">Laden…</td></tr>`;
+
+  // Vul school dropdown eenmalig
+  const sel = document.getElementById('loginFilterSchool');
+  if (sel.options.length === 1 && schools.length) {
+    schools.forEach(s => {
+      const o = document.createElement('option');
+      o.value = s.id; o.textContent = s.name;
+      sel.appendChild(o);
+    });
+  }
+
+  const school = sel.value;
+  const status = document.getElementById('loginFilterStatus').value;
+  const date   = document.getElementById('loginFilterDate').value;
+
+  const params = new URLSearchParams();
+  if (school) params.set('school', school);
+  if (status !== '') params.set('success', status);
+  if (date)   params.set('date', date);
+
+  try {
+    const data = await api('GET', `/superadmin/login-attempts${params.size ? '?' + params : ''}`);
+    const rows = data.attempts;
+
+    if (!rows.length) {
+      tbody.innerHTML = `<tr><td colspan="5" style="text-align:center;color:var(--text-muted);">Geen resultaten.</td></tr>`;
+      return;
+    }
+
+    tbody.innerHTML = rows.map(r => `
+      <tr>
+        <td style="white-space:nowrap;font-size:12px;">${new Date(r.created_at).toLocaleString('nl-NL')}</td>
+        <td>${escHtml(r.school_name || '–')}</td>
+        <td>
+          <div style="font-size:13px;">${escHtml(r.user_name || '–')}</div>
+          <div style="font-size:11px;color:var(--text-muted);">${escHtml(r.email)}</div>
+        </td>
+        <td style="font-size:12px;font-family:monospace;">${escHtml(r.ip_address || '–')}</td>
+        <td>
+          <span style="display:inline-block;padding:2px 10px;border-radius:99px;font-size:11px;font-weight:600;
+            background:${r.success ? '#f0fdf4' : '#fef2f2'};
+            color:${r.success ? '#16a34a' : '#dc2626'};">
+            ${r.success ? '✓ Succesvol' : '✗ Mislukt'}
+          </span>
+        </td>
+      </tr>`).join('');
+  } catch {
+    tbody.innerHTML = `<tr><td colspan="5" style="text-align:center;color:var(--danger);">Kon login logs niet ophalen.</td></tr>`;
+  }
+}
+
 function renderAuditTable() {
   const tbody = document.getElementById('auditTable');
   tbody.innerHTML = `<tr><td colspan="6" style="text-align:center;color:var(--text-muted);">

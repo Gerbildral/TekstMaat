@@ -63,8 +63,10 @@ async function login(request: Request, env: Env): Promise<Response> {
     ).bind(email.toLowerCase()).first<any>();
 
     if (!user) {
-      // Sla mislukte poging op
       await env.SESSIONS.put(attemptsKey, String(attempts + 1), { expirationTtl: 900 });
+      await env.DB.prepare(
+        'INSERT INTO login_attempts (id, email, ip_address, success) VALUES (?, ?, ?, 0)'
+      ).bind(crypto.randomUUID(), email.toLowerCase(), ip).run();
       return errorResponse('Ongeldig e-mailadres of wachtwoord', 401);
     }
 
@@ -72,11 +74,17 @@ async function login(request: Request, env: Env): Promise<Response> {
     const passwordOk = await verifyPassword(password, user.password_hash);
     if (!passwordOk) {
       await env.SESSIONS.put(attemptsKey, String(attempts + 1), { expirationTtl: 900 });
+      await env.DB.prepare(
+        'INSERT INTO login_attempts (id, email, ip_address, success) VALUES (?, ?, ?, 0)'
+      ).bind(crypto.randomUUID(), email.toLowerCase(), ip).run();
       return errorResponse('Ongeldig e-mailadres of wachtwoord', 401);
     }
 
     // Reset login pogingen
     await env.SESSIONS.delete(attemptsKey);
+    await env.DB.prepare(
+      'INSERT INTO login_attempts (id, email, ip_address, success) VALUES (?, ?, ?, 1)'
+    ).bind(crypto.randomUUID(), email.toLowerCase(), ip).run();
 
     // Update last_login
     await env.DB.prepare(
