@@ -1,13 +1,14 @@
 // routes/superadmin.ts – Superadmin API routes
 
+import type { Env } from '../index';
 import { jsonResponse, errorResponse, successResponse } from '../utils/responses';
-import { verifyToken } from '../utils/auth';
+import { verifyJWT, createJWT } from '../utils/auth';
 
 export async function handleSuperadmin(request: Request, env: Env, path: string): Promise<Response> {
   const token = request.headers.get('Authorization')?.replace('Bearer ', '');
   if (!token) return errorResponse('Niet ingelogd', 401);
 
-  const payload = await verifyToken(token, env.JWT_SECRET);
+  const payload = await verifyJWT(token, env.JWT_SECRET);
   if (!payload || payload.role !== 'superadmin') {
     return errorResponse('Geen toegang – superadmin vereist', 403);
   }
@@ -18,6 +19,11 @@ export async function handleSuperadmin(request: Request, env: Env, path: string)
   // GET /superadmin/stats
   if (method === 'GET' && segments[1] === 'stats') {
     return await getStats(env);
+  }
+
+  // GET /superadmin/health
+  if (method === 'GET' && segments[1] === 'health') {
+    return await getHealth(env);
   }
 
   // GET /superadmin/schools
@@ -168,7 +174,7 @@ async function createSchool(body: any, env: Env): Promise<Response> {
 
   // Create first admin if provided
   if (body.admin_email && body.admin_password) {
-    const { hashPassword } = await import('../utils/auth');
+    const { hashPassword } = await import('../utils/auth') as any;
     const hashed = await hashPassword(body.admin_password);
     const adminId = crypto.randomUUID();
     await env.DB.prepare(`
@@ -177,7 +183,7 @@ async function createSchool(body: any, env: Env): Promise<Response> {
     `).bind(adminId, id, body.admin_email.trim(), hashed, body.admin_name?.trim() || body.admin_email).run();
   }
 
-  return successResponse({ id }, 'School aangemaakt', 201);
+  return jsonResponse({ success: true, data: { id }, message: 'School aangemaakt' }, 201);
 }
 
 /* ──────────────────────────────────────────────────────────────
@@ -231,8 +237,7 @@ async function impersonateSchoolAdmin(schoolId: string, env: Env): Promise<Respo
   ).bind(schoolId).first<any>();
   if (!admin) return errorResponse('Geen actieve admin gevonden voor deze school');
 
-  const { createToken } = await import('../utils/auth');
-  const token = await createToken({ ...admin, school_id: schoolId, impersonated: true }, env.JWT_SECRET, 1); // 1 hour
+  const token = await createJWT({ ...admin, school_id: schoolId, first_name: admin.name, last_name: '' }, env.JWT_SECRET, 1); // 1 hour
   return jsonResponse({ token });
 }
 
@@ -260,6 +265,57 @@ async function exportSchool(schoolId: string, env: Env): Promise<Response> {
   return new Response(JSON.stringify(data, null, 2), {
     headers: { 'Content-Type': 'application/json', 'Content-Disposition': `attachment; filename="school-export-${schoolId}.json"` }
   });
+}
+
+/* ──────────────────────────────────────────────────────────────
+   System health
+────────────────────────────────────────────────────────────── */
+async function getHealth(env: Env): Promise<Response> {
+  const components: { name: string; status: 'ok' | 'warn' | 'error'; message: string }[] = [];
+
+  // Worker API – als dit antwoord geeft is hij up
+  components.push({ name: 'Worker API', status: 'ok', message: 'Operationeel' });
+
+  // D1 Database
+  try {
+    const row = await env.DB.prepare('SELECT COUNT(*) as cnt FROM users').first<any>();
+    components.push({ name: 'D1 Database', status: 'ok', message: `${row?.cnt ?? 0} gebruikers` });
+  } catch {
+    components.push({ name: 'D1 Database', status: 'error', message: 'Verbindingsfout' });
+  }
+
+  // KV Cache
+  try {
+    await env.SESSIONS.get('__health_check__');
+    components.push({ name: 'KV Cache', status: 'ok', message: 'Operationeel' });
+  } catch {
+    components.push({ name: 'KV Cache', status: 'error', message: 'Verbindingsfout' });
+  }
+
+  // R2 Opslag
+  try {
+    await env.FILES_BUCKET.list({ limit: 1 });
+    components.push({ name: 'R2 Opslag', status: 'ok', message: 'Operationeel' });
+  } catch {
+    components.push({ name: 'R2 Opslag', status: 'error', message: 'Verbindingsfout' });
+  }
+
+  // AI / OCR queue
+  try {
+    const queue = await env.DB.prepare(
+      `SELECT COUNT(*) as cnt FROM documents WHERE ocr_status IN ('pending','processing')`
+    ).first<any>();
+    const cnt = queue?.cnt ?? 0;
+    components.push({
+      name: 'AI / OCR',
+      status: cnt > 10 ? 'warn' : 'ok',
+      message: cnt > 0 ? `Wachtrij: ${cnt} items` : 'Geen wachtrij',
+    });
+  } catch {
+    components.push({ name: 'AI / OCR', status: 'warn', message: 'Status onbekend' });
+  }
+
+  return jsonResponse({ components });
 }
 
 /* ──────────────────────────────────────────────────────────────

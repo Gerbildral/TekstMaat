@@ -1266,21 +1266,22 @@ function renderAuditTable() {
 /* ═══════════════════════════════════════════════════════════════
    HEALTH
 ═══════════════════════════════════════════════════════════════ */
-function renderHealth() {
-  const meters = document.getElementById('storageMeters');
-  meters.innerHTML = schools.map(s => {
-    const pct = s.storage_limit_gb ? Math.round((s.storage_mb||0) / (s.storage_limit_gb*1024) * 100) : 0;
-    return `
-      <div>
-        <div style="display:flex;justify-content:space-between;margin-bottom:4px;">
-          <div style="font-size:13px;font-weight:600;color:var(--text-primary);">${escHtml(s.name)}</div>
-          <div style="font-size:12px;color:var(--text-muted);">${s.storage_mb ? (s.storage_mb/1024).toFixed(1) : '0'} / ${s.storage_limit_gb||0} GB (${pct}%)</div>
+async function renderHealth() {
+  const grid = document.getElementById('healthGrid');
+  grid.innerHTML = '<div style="color:var(--text-muted);font-size:13px;">Laden...</div>';
+  try {
+    const data = await api('GET', '/superadmin/health');
+    grid.innerHTML = data.components.map(c => `
+      <div class="health-card">
+        <div class="health-dot health-${c.status === 'ok' ? 'ok' : c.status === 'warn' ? 'warn' : 'err'}"></div>
+        <div>
+          <div class="health-label">${escHtml(c.name)}</div>
+          <div class="health-sub">${escHtml(c.message)}</div>
         </div>
-        <div style="height:8px;background:var(--bg-secondary);border-radius:4px;overflow:hidden;">
-          <div style="height:100%;width:${pct}%;background:${pct>85?'var(--danger)':pct>60?'#f59e0b':'var(--accent)'};border-radius:4px;transition:width 0.5s;"></div>
-        </div>
-      </div>`;
-  }).join('');
+      </div>`).join('');
+  } catch {
+    grid.innerHTML = '<div style="color:var(--danger);font-size:13px;">Kon systeemstatus niet ophalen.</div>';
+  }
 }
 
 /* ═══════════════════════════════════════════════════════════════

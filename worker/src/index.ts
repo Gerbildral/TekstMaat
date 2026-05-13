@@ -8,6 +8,7 @@ import { handleSchools, handleUsers, handleGroups, handleOCR } from './routes/sc
 import { handleDocuments } from './routes/documents';
 import { handleSessions } from './routes/sessions';
 import { handleFiles } from './routes/files';
+import { handleSuperadmin } from './routes/superadmin';
 import { corsHeaders, errorResponse } from './utils/responses';
 import { verifyJWT } from './utils/auth';
 
@@ -68,6 +69,7 @@ export default {
       }
 
       // Route naar juiste handler
+      if (apiPath.startsWith('/superadmin')) return handleSuperadmin(request, env, apiPath);
       if (apiPath.startsWith('/schools')) return handleSchools(request, env, user, apiPath);
       if (apiPath.startsWith('/users')) return handleUsers(request, env, user, apiPath);
       if (apiPath.startsWith('/documents')) return handleDocuments(request, env, user, apiPath);
