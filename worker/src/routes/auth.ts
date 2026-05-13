@@ -3,7 +3,7 @@
  */
 
 import type { Env } from '../index';
-import { createJWT, verifyPassword, hashPassword } from '../utils/auth';
+import { createJWT, verifyPassword, hashPassword, verifyJWT } from '../utils/auth';
 import { jsonResponse, errorResponse, successResponse } from '../utils/responses';
 import { sendPasswordResetEmail } from '../utils/email';
 
@@ -18,6 +18,11 @@ export async function handleAuth(request: Request, env: Env, path: string): Prom
   // POST /api/auth/logout
   if (path === '/auth/logout' && method === 'POST') {
     return successResponse(null, 'Uitgelogd');
+  }
+
+  // GET /api/auth/me
+  if (path === '/auth/me' && method === 'GET') {
+    return getMe(request, env);
   }
 
   // POST /api/auth/reset-password
@@ -156,11 +161,31 @@ async function setPassword(request: Request, env: Env): Promise<Response> {
       'UPDATE users SET password_hash = ? WHERE email = ?'
     ).bind(hash, email).run();
 
-    if (result.changes === 0) return errorResponse('Gebruiker niet gevonden', 404);
+    if (result.meta.changes === 0) return errorResponse('Gebruiker niet gevonden', 404);
 
     await env.SESSIONS.delete(`reset:${token}`);
     return successResponse(null, 'Wachtwoord succesvol gewijzigd');
   } catch {
     return errorResponse('Fout bij instellen wachtwoord');
   }
+}
+
+async function getMe(request: Request, env: Env): Promise<Response> {
+  const authHeader = request.headers.get('Authorization');
+  if (!authHeader?.startsWith('Bearer ')) {
+    return errorResponse('Niet ingelogd', 401);
+  }
+  const user = await verifyJWT(authHeader.slice(7), env.JWT_SECRET);
+  if (!user) {
+    return errorResponse('Ongeldige of verlopen sessie', 401);
+  }
+  return jsonResponse({
+    id: user.id,
+    email: user.email,
+    role: user.role,
+    name: `${user.first_name} ${user.last_name}`.trim(),
+    first_name: user.first_name,
+    last_name: user.last_name,
+    school_id: user.school_id,
+  });
 }
