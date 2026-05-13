@@ -27,6 +27,7 @@ JWT_SECRET = "NyCIK3jrrMMXPhBq6ynQ8I9C3B9mBIL7VQz1Mkz0f5lpkjAnpcJdmRQfBgHwjSJHaA
 APP_URL = "https://mijnleeshulp.nl"
 CDN_URL = "https://cdn.mijnleeshulp.nl"
 FROM_EMAIL = "noreply@mijnleeshulp.nl"
+ELEVENLABS_VOICES = '[{"id":"h6uBOiAjLKklte8hdYio","name":"Roland"}]'
  
 # R2 bucket voor bestanden
 [[r2_buckets]]

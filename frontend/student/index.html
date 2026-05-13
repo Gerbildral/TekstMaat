@@ -526,7 +526,7 @@ let currentSentenceIdx = 0;
 let totalCharCount = 0;
 let processedChars = 0;
 
-// Inworld AudioContext staat
+// ElevenLabs AudioContext staat
 let audioCtx = null;
 let ttsController = null;
 let scheduledSources = [];
@@ -573,9 +573,7 @@ async function init() {
     if (e.code === 'ArrowLeft') prevPage();
   });
 
-  // Inworld stemmen laden
-  loadInworldVoices();
-
+  await loadVoices();
   await loadSessions();
 }
 
@@ -934,7 +932,7 @@ function pauseTTS() {
   clearHighlights();
 }
 
-// Decodeer Inworld LINEAR16 base64 → AudioBuffer
+// Decodeer ElevenLabs PCM base64 → AudioBuffer
 function pcmBase64ToAudioBuffer(base64) {
   const binary = atob(base64);
   const bytes = new Uint8Array(binary.length);
@@ -1130,7 +1128,7 @@ function rewindSentence() {
 }
 
 function changeSpeed(delta) {
-  // Inworld speakingRate max is 1.5; browser UI loopt tot 2.0 maar we begrenzen zacht
+  // ElevenLabs speed range: 0.7–1.2; UI loopt tot 2.0 maar we begrenzen bij verzenden
   currentSpeed = Math.max(0.5, Math.min(2.0, currentSpeed + delta));
   const clamped = Math.min(currentSpeed, 1.5);
   const display = currentSpeed.toFixed(2).replace(/\.?0+$/, '') + '×';
@@ -1148,7 +1146,7 @@ function changeSpeed(delta) {
 }
 
 function changeLang(lang) {
-  // Inworld detecteert taal automatisch — currentLang bijhouden voor UI
+  // Taal bijhouden voor UI (ElevenLabs detecteert automatisch)
   currentLang = lang;
 }
 
@@ -1288,9 +1286,9 @@ function seekToPosition(event) {
 }
 
 // ============================================================
-//  STEMMEN (ElevenLabs — geconfigureerd via ELEVENLABS_VOICES)
+//  STEMMEN
 // ============================================================
-async function loadInworldVoices() {
+async function loadVoices() {
   const select = document.getElementById('voiceSelect');
   try {
     const voices = await api('/tts/voices');
