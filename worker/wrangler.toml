@@ -30,14 +30,10 @@ preview_id = "d4e8ce68f0f64d27be7ea78141ed5a4d"
 [ai]
 binding = "AI"
  
-# Routes voor static assets (frontend)
 [[rules]]
 type = "ESModule"
 globs = ["**/*.ts"]
- 
-[site]
-bucket = "../frontend"
- 
+
 # Development omgeving
 [env.development]
 vars = { ENVIRONMENT = "development", APP_URL = "http://localhost:8787" }

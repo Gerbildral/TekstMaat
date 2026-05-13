@@ -1,12 +1,12 @@
 {
   "$schema": "node_modules/wrangler/config-schema.json",
-  "name": "tekstmaat-page",
+  "name": "tekstmaat-frontend",
   "compatibility_date": "2026-05-12",
   "observability": {
     "enabled": true
   },
   "assets": {
-    "directory": "admin"
+    "directory": "."
   },
   "compatibility_flags": [
     "nodejs_compat"
