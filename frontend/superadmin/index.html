@@ -1397,10 +1397,6 @@ function logout() {
   window.location.href = '../login.html';
 }
 
-// Close modals on backdrop click
-document.querySelectorAll('.modal-backdrop').forEach(b => {
-  b.addEventListener('click', e => { if (e.target === b) b.classList.remove('open'); });
-});
 </script>
 </body>
 </html>
