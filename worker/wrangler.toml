@@ -26,14 +26,14 @@ APP_URL = "https://mijnleeshulp.foxion-hosting.workers.dev"
 # R2 bucket voor bestanden
 [[r2_buckets]]
 binding = "FILES_BUCKET"
-bucket_name = "tekstmaat-files"
-preview_bucket_name = "tekstmaat-files-preview"
+bucket_name = "mijnleeshulp-files"
+preview_bucket_name = "mijnleeshulp-files-preview"
  
 # D1 database
 [[d1_databases]]
 binding = "DB"
-database_name = "tekstmaat-db"
-database_id = "69184d06-e869-4ec7-b275-14982ca7dcba"
+database_name = "mijnleeshulp-db"
+database_id = "b3b17c11-c0d4-4c13-936a-7db6746e2500"
  
 # KV voor sessies/cache
 [[kv_namespaces]]
