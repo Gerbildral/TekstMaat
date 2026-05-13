@@ -1,21 +1,5 @@
 import { EmailMessage } from 'cloudflare:email';
-
-function buildMime(from: string, to: string, subject: string, html: string): string {
-  const bytes = new TextEncoder().encode(subject);
-  let binary = '';
-  for (const byte of bytes) binary += String.fromCharCode(byte);
-  const encodedSubject = `=?UTF-8?B?${btoa(binary)}?=`;
-
-  return [
-    'MIME-Version: 1.0',
-    `From: MijnLeesHulp <${from}>`,
-    `To: ${to}`,
-    `Subject: ${encodedSubject}`,
-    'Content-Type: text/html; charset=utf-8',
-    '',
-    html,
-  ].join('\r\n');
-}
+import { createMimeMessage } from 'mimetext';
 
 export async function sendPasswordResetEmail(
   emailBinding: SendEmail,
@@ -67,7 +51,12 @@ export async function sendPasswordResetEmail(
 </body>
 </html>`;
 
-  const raw = buildMime(fromEmail, to, 'Wachtwoord reset – MijnLeesHulp', html);
-  const message = new EmailMessage(fromEmail, to, raw);
+  const msg = createMimeMessage();
+  msg.setSender({ name: 'MijnLeesHulp', addr: fromEmail });
+  msg.setRecipient(to);
+  msg.setSubject('Wachtwoord reset – MijnLeesHulp');
+  msg.addMessage({ contentType: 'text/html', data: html });
+
+  const message = new EmailMessage(fromEmail, to, msg.asRaw());
   await emailBinding.send(message);
 }

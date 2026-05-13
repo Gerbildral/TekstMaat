@@ -7,6 +7,9 @@
     "deploy": "wrangler deploy",
     "db:migrate": "wrangler d1 execute mijnleeshulp-db --file=../database/schema.sql"
   },
+  "dependencies": {
+    "mimetext": "^3.0.24"
+  },
   "devDependencies": {
     "@cloudflare/workers-types": "^4.20240529.0",
     "typescript": "^5.4.5",
