@@ -19,9 +19,10 @@ persist = true
 head_sampling_rate = 1
 
 [vars]
-ENVIRONMENT = "development"
+ENVIRONMENT = "production"
 JWT_SECRET = "NyCIK3jrrMMXPhBq6ynQ8I9C3B9mBIL7VQz1Mkz0f5lpkjAnpcJdmRQfBgHwjSJHaAu74tgBYDiTWHzWQ5122w=="
 APP_URL = "https://mijnleeshulp.foxion-hosting.workers.dev"
+FROM_EMAIL = "noreply@mijnleeshulp.nl"
  
 # R2 bucket voor bestanden
 [[r2_buckets]]
@@ -45,6 +46,10 @@ preview_id = "d4e8ce68f0f64d27be7ea78141ed5a4d"
 # AI binding voor OCR/tekst extractie
 [ai]
 binding = "AI"
+
+# Email sending via Cloudflare Email Routing
+[[send_email]]
+name = "EMAIL"
  
 [[rules]]
 type = "ESModule"

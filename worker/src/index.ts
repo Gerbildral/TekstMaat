@@ -16,9 +16,11 @@ export interface Env {
   FILES_BUCKET: R2Bucket;
   SESSIONS: KVNamespace;
   AI: any;
+  EMAIL: SendEmail;
   JWT_SECRET: string;
   ENVIRONMENT: string;
   APP_URL: string;
+  FROM_EMAIL: string;
 }
 
 export interface AuthUser {

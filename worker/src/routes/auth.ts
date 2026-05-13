@@ -5,6 +5,7 @@
 import type { Env } from '../index';
 import { createJWT, verifyPassword, hashPassword } from '../utils/auth';
 import { jsonResponse, errorResponse, successResponse } from '../utils/responses';
+import { sendPasswordResetEmail } from '../utils/email';
 
 export async function handleAuth(request: Request, env: Env, path: string): Promise<Response> {
   const method = request.method;
@@ -127,11 +128,11 @@ async function resetPasswordRequest(request: Request, env: Env): Promise<Respons
     const key = `reset:${token}`;
     await env.SESSIONS.put(key, email.toLowerCase(), { expirationTtl: 3600 });
 
-    // In productie: stuur e-mail via Resend, Mailgun etc.
-    // Voor nu: geef token terug (alleen in development!)
     if (env.ENVIRONMENT === 'development') {
       return successResponse({ reset_token: token }, 'Reset link aangemaakt (dev modus)');
     }
+
+    await sendPasswordResetEmail(env.EMAIL, email.toLowerCase(), token, env.APP_URL, env.FROM_EMAIL);
 
     return successResponse(null, 'Als het e-mailadres bekend is, ontvang je een reset link');
   } catch {
