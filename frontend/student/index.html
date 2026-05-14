@@ -721,6 +721,9 @@ async function renderPage(pageNum) {
   overlay.style.width = viewport.width + 'px';
   overlay.style.height = viewport.height + 'px';
 
+  canvas.style.cursor = 'text';
+  canvas.addEventListener('click', (e) => clickOnPage(pageNum, e.offsetX, e.offsetY));
+
   wrapper.appendChild(canvas);
   wrapper.appendChild(overlay);
 
@@ -1114,6 +1117,43 @@ function cancelAndRestart() {
   scheduledSources.forEach(s => { try { s.stop(0); } catch (_) {} });
   scheduledSources = [];
   clearHighlights();
+}
+
+function clickOnPage(pageNum, px, py) {
+  const pageData = pageTexts.find(p => p.page === pageNum);
+  if (!pageData?.words?.length) return;
+
+  const pageInfo = pdfPages[pageNum];
+  if (!pageInfo) return;
+  const scale = pageInfo.viewport.scale;
+
+  // Zoek het dichtstbijzijnde woord (y-afstand zwaarder gewogen dan x)
+  let bestIdx = -1;
+  let bestDist = Infinity;
+  pageData.words.forEach((wp, i) => {
+    const cx = (wp.x + wp.w / 2) * scale;
+    const cy = (wp.y + wp.h / 2) * scale;
+    const dx = px - cx;
+    const dy = (py - cy) * 3; // y zwaarder: regel-selectie gaat voor
+    const dist = dx * dx + dy * dy;
+    if (dist < bestDist) { bestDist = dist; bestIdx = i; }
+  });
+
+  if (bestIdx < 0) return;
+
+  // Zoek de zin die dit woord bevat
+  // wpStart/wpEnd zijn globale indices in pageData.words — maar alleen per pagina bijgehouden
+  // Zoek zin voor deze pagina waarbij wpStart <= bestIdx < wpEnd
+  const sentIdx = sentences.findIndex(s =>
+    s.page === pageNum && s.wpStart <= bestIdx && bestIdx < s.wpEnd
+  );
+  if (sentIdx < 0) return;
+
+  cancelAndRestart();
+  currentSentenceIdx = sentIdx;
+  highlightSentenceAndWord(sentences[sentIdx], -1, 0);
+
+  if (isPlaying) speakCurrentSentence();
 }
 
 function skipSentence() {
